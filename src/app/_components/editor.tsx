@@ -12,6 +12,7 @@ import { FramePreview } from "./frame-preview";
 import { AspectGlyph } from "./frame";
 import { Button, Checkbox, Field, Input, Notice, Section, Select, Status, Textarea, api, usd } from "./ui";
 import { Upload } from "./upload";
+import { useFeedback } from "./feedback";
 import { IconAlert, IconArrowLeft, IconArrowRight, IconCheck, IconFilm, IconImage, IconMusic, IconPlay, IconPlus, IconRefresh, IconSliders, IconText, IconTrash, IconX } from "./icons";
 
 type SaveState = "saved" | "saving" | "dirty" | "conflict" | "error";
@@ -81,6 +82,7 @@ const stepFromHash = (): StepKey => {
 
 export function Editor({ versionId, adId }: { versionId: string; adId: string }) {
   const router = useRouter();
+  const { confirm: ask, toast } = useFeedback();
   const [view, setView] = useState<VersionView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [save, setSave] = useState<SaveState>("saved");
@@ -205,9 +207,12 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
       const res = await fetch(`/api/versions/${versionId}/storyboard`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm }) });
       const body = (await res.json()) as { applied: boolean; editedScenes: number[] };
       if (!body.applied && body.editedScenes?.length) {
-        if (window.confirm(`You've edited scene ${body.editedScenes.join(", ")}. Replace every scene with a fresh storyboard?`)) return buildStoryboard(true);
+        const ok = await ask({ title: "Replace your scene edits?", body: `You've changed scene ${body.editedScenes.join(", ")}. Rebuilding makes every scene fresh from the brief.`, confirmLabel: "Rebuild storyboard", danger: true });
+        if (ok) return buildStoryboard(true);
+        return;
       } else if (!res.ok) throw new Error("Couldn't build the storyboard. Check the brief and try again.");
       await load();
+      toast(confirm ? "Storyboard rebuilt from the brief." : "Storyboard ready — adjust any scene below.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -266,7 +271,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
-          <div className="mb-5">
+          <div key={step} className="step-enter mb-5">
             <p className="text-xs font-semibold text-ink-3">
               Step {idx + 1} of {STEPS.length}
             </p>
@@ -276,7 +281,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
             <p className="mt-1 max-w-prose text-sm text-ink-2">{current.intro}</p>
           </div>
 
-          <div className="grid gap-5">
+          <div key={`${step}-body`} className="step-enter grid gap-5">
             {step === "product" ? (
               <>
                 <Section id="product" title="Basics">
@@ -882,7 +887,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
         <aside className="lg:sticky lg:top-32 lg:self-start" aria-label="Ad summary">
           <div className="grid gap-4 rounded-xl border border-line bg-panel p-4">
             <p className="flex items-center gap-2 text-xs font-semibold text-ink-2" aria-live="polite">
-              <span aria-hidden className={`size-1.5 rounded-full ${save === "saved" ? "bg-ok" : save === "conflict" || save === "error" ? "bg-bad" : "bg-warn"}`} />
+              <span aria-hidden className={`size-1.5 rounded-full ${save === "saved" ? "bg-ok" : save === "conflict" || save === "error" ? "bg-bad" : "saving-dot bg-warn"}`} />
               {{ saved: "All changes saved", saving: "Saving…", dirty: "Saving soon…", conflict: "Changed in another tab — reload the page", error: "Couldn't save — check your connection" }[save]}
             </p>
             <div>

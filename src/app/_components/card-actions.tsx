@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconCopy, IconTrash } from "./icons";
+import { useFeedback } from "./feedback";
 
 export function CardActions({ adId, name }: { adId: string; name: string }) {
   const router = useRouter();
+  const { confirm, toast } = useFeedback();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = async (fn: () => Promise<Response>, after: (r: Response) => Promise<void> | void) => {
@@ -35,8 +37,13 @@ export function CardActions({ adId, name }: { adId: string; name: string }) {
         disabled={busy}
         className={btn}
         aria-label={`Delete ${name}`}
-        onClick={() => {
-          if (window.confirm(`Delete "${name}"?\n\nIt disappears from your library now and is removed for good, with its videos, after 7 days.`)) void run(() => fetch(`/api/ads/${adId}`, { method: "DELETE" }), () => router.refresh());
+        onClick={async () => {
+          const ok = await confirm({ title: `Delete “${name}”?`, body: "It leaves your library now and is removed for good, with its videos, after 7 days.", confirmLabel: "Delete ad", danger: true });
+          if (ok)
+            void run(() => fetch(`/api/ads/${adId}`, { method: "DELETE" }), () => {
+              toast(`Deleted “${name}”.`);
+              router.refresh();
+            });
         }}
       >
         <IconTrash size={15} />

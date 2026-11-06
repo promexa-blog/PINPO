@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { VersionView } from "@/server/views";
 import { PLATFORMS } from "@/lib/platforms";
 import { ASPECT_RATIO } from "./frame";
+import { useFeedback } from "./feedback";
 import { Button, Checkbox, Notice, Section, Status, api, buttonClass, usd, type Tone } from "./ui";
 import { IconAlert, IconCheck, IconChevronDown, IconDownload, IconLayout, IconRefresh, IconTrash, IconX } from "./icons";
 
@@ -44,6 +45,7 @@ const qaLabel = (q: QaItem) => (q.status === "pass" ? "Pass" : q.status === "fai
 
 export function Overview({ versionId, adId }: { versionId: string; adId: string }) {
   const router = useRouter();
+  const { confirm, prompt, toast } = useFeedback();
   const [view, setView] = useState<VersionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -102,6 +104,8 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
   const creative = view.qa.filter((q) => q.reportKind === "creative" || q.status !== "pass");
   const order = (q: QaItem) => (q.status === "fail" ? 0 : q.status === "needs_review" && !q.acknowledgedAt ? 1 : q.status === "warn" ? 2 : 3);
   const sortedQa = [...creative].sort((a, b) => order(a) - order(b));
+  const attention = sortedQa.filter((q) => q.status !== "pass" && !(q.status === "needs_review" && q.acknowledgedAt));
+  const passed = sortedQa.filter((q) => !attention.includes(q));
   const fails = view.qa.filter((q) => q.status === "fail");
   const toReview = view.qa.filter((q) => q.status === "needs_review" && !q.acknowledgedAt);
   const techPassed = view.qa.filter((q) => q.reportKind === "technical" && q.status === "pass").length;
@@ -152,12 +156,12 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
         <Button
           variant="quiet"
           disabled={busy}
-          onClick={() => {
-            const name = window.prompt("Name for the new template", `${view.ad.name} layout`);
+          onClick={async () => {
+            const name = await prompt({ title: "Save as a template", body: "Keeps this ad's scene order, timing and text layout so you can reuse it for other products.", label: "Template name", defaultValue: `${view.ad.name} layout`, confirmLabel: "Save template", maxLength: 60 });
             if (name)
               void act(async () => {
                 await api(`/api/versions/${versionId}/save-as-template`, { method: "POST", body: JSON.stringify({ name }) });
-                window.alert("Saved. It's now in Templates and in the list when you start a new ad.");
+                toast(`Saved “${name}”. Find it in Templates or when you start a new ad.`);
               });
           }}
         >
@@ -169,12 +173,15 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
             variant="quiet"
             disabled={busy}
             className="ml-auto"
-            onClick={() => {
+            onClick={async () => {
               const other = versions.find((x) => x.id !== v.id);
-              if (other && window.confirm(`Delete version ${v.number}?\n\nIts video and check results are removed. Other versions stay.`))
+              if (!other) return;
+              const ok = await confirm({ title: `Delete version ${v.number}?`, body: "Its video and check results are removed. Your other versions stay.", confirmLabel: "Delete version", danger: true });
+              if (ok)
                 void act(async () => {
                   await api(`/api/ads/${adId}`, { method: "PATCH", body: JSON.stringify({ currentVersionId: other.id }) });
                   await fetch(`/api/versions/${versionId}`, { method: "DELETE" });
+                  toast(`Deleted version ${v.number}.`);
                   router.refresh();
                 });
             }}
@@ -330,26 +337,36 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
           </Section>
 
           {view.qa.length ? (
-            <Section title="Quality checks" description={`Brand, claim, price, rights and technical checks. Items marked Review need a person to look before export. ${techPassed} technical checks passed (length, size, frame rate, colour, sound, clean decode).`}>
-              <ul className="divide-y divide-line">
-                {sortedQa.map((q) => (
-                  <li key={q.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[11rem_1fr_auto] sm:items-start">
-                    <div className="flex items-center gap-2">
-                      <Status tone={qaTone(q)}>{qaLabel(q)}</Status>
-                      <span className="text-sm font-semibold">{CHECK_LABEL[q.check] ?? q.check.replace(/^technical_/, "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</span>
-                    </div>
-                    <p className="text-sm text-ink-2">
-                      {q.message}
-                      {q.method !== "automated" ? <span className="ml-1 text-xs text-ink-3">({q.method === "heuristic" ? "assessment" : "needs a person"})</span> : null}
-                    </p>
-                    {q.status === "needs_review" && !q.acknowledgedAt ? (
+            <Section
+              title="Quality checks"
+              description={attention.length ? `${attention.length} item${attention.length === 1 ? "" : "s"} for you to look at. Brand, claim, price, rights and technical checks run on every version.` : "Everything checks out — brand, claims, prices, rights and the technical file."}
+            >
+              {attention.length ? (
+                <ul className="divide-y divide-line">
+                  {attention.map((q) => (
+                    <QaRow key={q.id} q={q} action={q.status === "needs_review" && !q.acknowledgedAt ? (
                       <Button variant="secondary" size="sm" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/qa/${q.id}/ack`, { method: "POST" }))}>
                         <IconCheck size={15} />I reviewed this
                       </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+                    ) : null} />
+                  ))}
+                </ul>
+              ) : null}
+              <details className={`group ${attention.length ? "mt-4 border-t border-line pt-3" : ""}`}>
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-sm font-semibold text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+                  <span className="grid size-5 place-items-center rounded-full bg-ok-soft text-ok" aria-hidden>
+                    <IconCheck size={12} strokeWidth={2.5} />
+                  </span>
+                  {passed.length + techPassed} checks passed
+                  <IconChevronDown size={16} className="transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <ul className="mt-2 divide-y divide-line">
+                  {passed.map((q) => (
+                    <QaRow key={q.id} q={q} />
+                  ))}
+                  <li className="py-2.5 text-[13px] text-ink-3">Plus {techPassed} technical checks: exact length and size, frame rate, colour, sound, fast start, clean decode.</li>
+                </ul>
+              </details>
             </Section>
           ) : null}
         </div>
@@ -367,6 +384,22 @@ function GateRow({ ok, label }: { ok: boolean; label: string }) {
         <span className="sr-only">{ok ? "Done: " : "To do: "}</span>
         {label}
       </span>
+    </li>
+  );
+}
+
+function QaRow({ q, action }: { q: QaItem; action?: ReactNode }) {
+  return (
+    <li className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[11rem_1fr_auto] sm:items-start">
+      <div className="flex items-center gap-2">
+        <Status tone={qaTone(q)}>{qaLabel(q)}</Status>
+        <span className="text-sm font-semibold">{CHECK_LABEL[q.check] ?? q.check.replace(/^technical_/, "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</span>
+      </div>
+      <p className="text-sm text-ink-2">
+        {q.message}
+        {q.method !== "automated" ? <span className="ml-1 text-xs text-ink-3">({q.method === "heuristic" ? "assessment" : "needs a person"})</span> : null}
+      </p>
+      {action}
     </li>
   );
 }

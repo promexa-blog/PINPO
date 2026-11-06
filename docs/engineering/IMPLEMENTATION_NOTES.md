@@ -127,3 +127,15 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - Verified: typecheck, lint, 98 unit/integration, 4 e2e (desktop + 375 px), impeccable detector
   (no findings), DOM audit (one h1/main per page, labelled controls, named buttons, no overflow,
   skip link first) on every page and editor step.
+
+## v3 polish — dialogs, motion, type, draft frames (2026-11-06)
+- `FeedbackProvider` (root layout): promise-based `confirm`/`prompt` on native `<dialog>.showModal()`
+  (focus trap, Escape, backdrop click, focus returns) and live-region toasts. No `window.confirm/alert/prompt` left.
+- Motion vocabulary in globals.css: step/dialog/toast/menu entrances (180–240 ms, ease-out), saving
+  pulse; all removed by the global reduced-motion rule. `--ease-out` lives on `:root` (`@theme inline`
+  values are not emitted as runtime variables).
+- Interface face: Instrument Sans (OFL, `assets/fonts/ui/`), with Noto Sans / Malayalam / Devanagari
+  as fallbacks for Indic text. Separator dots come from Noto via a `unicode-range` face because
+  Instrument Sans kerns the space around "·" too tightly.
+- Library drafts render as branded frames (the brand's own tints) with the product photo or a next step.
+- Quality checks: attention items first; passes folded into "N checks passed".

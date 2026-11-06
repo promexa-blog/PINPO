@@ -25,7 +25,7 @@ export function NewAdForm({ brands, templates, initialTemplate, initialBrand }: 
   const template = templates.find((t) => t.key === templateKey);
   const brand = brands.find((b) => b.id === brandId);
   const platformOk = !template || template.platforms.includes(platform);
-  const autoName = `${template?.name ?? "Ad"} · ${PLATFORMS[platform].label}`;
+  const autoName = `${template?.name ?? "Ad"} – ${PLATFORMS[platform].label}`;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

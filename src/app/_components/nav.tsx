@@ -78,7 +78,7 @@ export function MobileMenu({ mode }: { mode: StudioMode }) {
       {open ? (
         <>
           <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 top-14 z-30 cursor-default bg-black/40" onClick={() => setOpen(false)} />
-          <nav id="mobile-nav" aria-label="Main" className="absolute inset-x-0 top-full z-40 border-b border-line bg-canvas px-4 pb-4 pt-2 shadow-lift">
+          <nav id="mobile-nav" aria-label="Main" className="menu-enter absolute inset-x-0 top-full z-40 border-b border-line bg-canvas px-4 pb-4 pt-2 shadow-lift">
             <ul className="grid gap-1">
               {LINKS.map((l) => {
                 const active = l.match(path);

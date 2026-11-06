@@ -42,6 +42,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   const { q = "", status = "" } = await searchParams;
   const brands = listBrands();
   const all = listAds();
+  const brandById = new Map(brands.map((b) => [b.id, { name: b.name, primary: b.primary, secondary: b.secondary }]));
   const now = nowMs();
   const count = (g: string) => (g ? all.filter((a) => STATUS[a.status]?.group === g).length : all.length);
   const ads = all.filter((a) => (!q || a.name.toLowerCase().includes(q.toLowerCase())) && (!status || STATUS[a.status]?.group === status));
@@ -62,6 +63,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
       thumbId: a.thumb_asset_id,
       videoId: a.status === "ready" ? a.final_asset_id : null,
       productId: a.product_asset_id,
+      brand: brandById.get(a.brand_kit_id) ?? null,
     };
   });
   const filterHref = (key: string) => {

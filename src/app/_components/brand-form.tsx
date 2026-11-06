@@ -7,6 +7,7 @@ import { BrandPreview } from "./brand-preview";
 import { Upload } from "./upload";
 import { Button, Field, Input, Notice, Section, Textarea, api } from "./ui";
 import { IconCheck, IconLock, IconTrash } from "./icons";
+import { useFeedback } from "./feedback";
 
 export interface BrandFormValues {
   name: string;
@@ -27,6 +28,7 @@ const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 /** Create or edit a brand kit with a live preview of its real outro and overlay. */
 export function BrandForm({ mode, initial, brandId, next }: { mode: "create" | "edit"; initial: BrandFormValues; brandId?: string; next?: string }) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const [v, setV] = useState(initial);
   const [editing, setEditing] = useState(mode === "create");
   const [note, setNote] = useState("");
@@ -61,11 +63,13 @@ export function BrandForm({ mode, initial, brandId, next }: { mode: "create" | "
     try {
       if (mode === "create") {
         const b = await api<{ id: string }>("/api/brands", { method: "POST", body: JSON.stringify(body) });
+        toast(next === "new" ? `${v.name} is ready — now pick a template.` : `${v.name} is ready to use.`);
         router.push(next === "new" ? `/new?brand=${b.id}` : `/brands/${b.id}`);
         router.refresh();
         return;
       }
-      await api(`/api/brands/${brandId}`, { method: "PATCH", body: JSON.stringify({ ...body, note: note || undefined }) });
+      const saved = await api<{ revisionNumber: number }>(`/api/brands/${brandId}`, { method: "PATCH", body: JSON.stringify({ ...body, note: note || undefined }) });
+      toast(`Saved as revision ${saved.revisionNumber}. Existing ads keep their revision.`);
       setEditing(false);
       setSaved(true);
       setNote("");

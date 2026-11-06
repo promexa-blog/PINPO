@@ -2,22 +2,28 @@
 
 import { useState } from "react";
 import { Button } from "./ui";
+import { useFeedback } from "./feedback";
 
 export function MaintenanceButtons() {
-  const [msg, setMsg] = useState<string | null>(null);
+  const { toast } = useFeedback();
+  const [busy, setBusy] = useState(false);
   const run = async (url: string, label: string) => {
-    const r = await fetch(url, { method: "POST" });
-    setMsg(r.ok ? `${label} queued — the worker runs it in the background.` : `${label} couldn't be queued.`);
+    setBusy(true);
+    try {
+      const r = await fetch(url, { method: "POST" });
+      toast(r.ok ? `${label} started — the worker runs it in the background.` : `${label} couldn't start. Is the worker running?`, r.ok ? "ok" : "bad");
+    } finally {
+      setBusy(false);
+    }
   };
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Button variant="secondary" onClick={() => run("/api/system/gc", "Clean-up")}>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="secondary" disabled={busy} onClick={() => run("/api/system/gc", "Clean-up")}>
         Free up space
       </Button>
-      <Button variant="secondary" onClick={() => run("/api/system/backup", "Backup")}>
+      <Button variant="secondary" disabled={busy} onClick={() => run("/api/system/backup", "Backup")}>
         Back up database now
       </Button>
-      {msg ? <p role="status" className="text-sm">{msg}</p> : null}
     </div>
   );
 }

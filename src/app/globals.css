@@ -7,6 +7,7 @@
  * Accent: marigold. It marks primary actions, current selection and focus — nothing else.
  */
 :root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   color-scheme: dark;
   --canvas: oklch(0.165 0.008 255);
   --panel: oklch(0.205 0.009 255);
@@ -109,8 +110,7 @@
   --color-bad-soft: var(--bad-soft);
   --color-frame: var(--frame-bg);
   --shadow-lift: var(--shadow);
-  --font-sans: var(--font-pinpo), system-ui, sans-serif;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --font-sans: "PINPO Separators", var(--font-ui), var(--font-pinpo), "PINPO Malayalam", "PINPO Devanagari", system-ui, sans-serif;
 }
 
 html {
@@ -137,6 +137,22 @@ h1, h2, h3 { text-wrap: balance; }
 p { text-wrap: pretty; }
 .tabular { font-variant-numeric: tabular-nums; }
 
+/*
+ * Motion: entrances only, short, strong ease-out. It confirms what changed (a new step, a dialog,
+ * a notice); nothing loops or decorates. Removed entirely under reduced motion.
+ */
+@keyframes rise-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(4px) scale(0.97); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes breathe { 50% { opacity: 0.35; } }
+.step-enter { animation: rise-in 240ms var(--ease-out) both; }
+.dialog-enter[open] { animation: pop-in 180ms var(--ease-out) both; }
+.dialog-enter[open]::backdrop { animation: fade-in 180ms ease-out both; }
+.toast-enter { animation: toast-in 220ms var(--ease-out) both; }
+.menu-enter { animation: rise-in 180ms var(--ease-out) both; }
+.saving-dot { animation: breathe 1s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
@@ -149,3 +165,5 @@ p { text-wrap: pretty; }
 @font-face { font-family: "PINPO Sans"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "PINPO Malayalam"; src: url("/api/fonts/NotoSansMalayalam.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "PINPO Devanagari"; src: url("/api/fonts/NotoSansDevanagari.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+/* Instrument Sans kerns the space around "·" very tightly; take just the separator glyphs from Noto. */
+@font-face { font-family: "PINPO Separators"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); unicode-range: U+00B7, U+2022; font-weight: 100 900; font-display: swap; }

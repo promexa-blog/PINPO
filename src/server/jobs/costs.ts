@@ -78,3 +78,23 @@ export function costSummary(versionId: string): CostSummary {
 export function reconcile(falRequestId: string): void {
   db().prepare("UPDATE cost_entries SET reconciled = 1 WHERE fal_request_id = ? AND kind IN ('calculated','exposure_failed','exposure_canceled','exposure_duplicate')").run(falRequestId);
 }
+
+/** Monthly totals for Settings (plan §10): categories kept separate, never summed into "billed". */
+export function costTotalsByMonth(): { month: string; estimated: number; calculated: number; exposure: number; confirmed: number | null }[] {
+  const rows = db()
+    .prepare(
+      `SELECT strftime('%Y-%m', at / 1000, 'unixepoch') AS month, kind, SUM(usd) AS usd, COUNT(*) AS n
+       FROM cost_entries WHERE reconciled = 0 GROUP BY month, kind ORDER BY month DESC`,
+    )
+    .all() as { month: string; kind: CostKind; usd: number }[];
+  const by = new Map<string, { month: string; estimated: number; calculated: number; exposure: number; confirmed: number | null }>();
+  for (const r of rows) {
+    const m = by.get(r.month) ?? { month: r.month, estimated: 0, calculated: 0, exposure: 0, confirmed: null };
+    if (r.kind === "estimated") m.estimated += r.usd;
+    else if (r.kind === "calculated") m.calculated += r.usd;
+    else if (r.kind.startsWith("exposure_")) m.exposure += r.usd;
+    else m.confirmed = (m.confirmed ?? 0) + r.usd;
+    by.set(r.month, m);
+  }
+  return [...by.values()];
+}

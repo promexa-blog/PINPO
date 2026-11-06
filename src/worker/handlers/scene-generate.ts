@@ -261,7 +261,7 @@ function succeed(ctx: JobContext, input: SceneJobInput, clipAssetId: string, dat
     ctx.transition({ status: "succeeded", stage: "done", message: "scene ready", progress: 1, data });
     db().prepare("UPDATE scenes SET status = 'succeeded', clip_asset_id = ? WHERE id = ?").run(clipAssetId, input.sceneId);
     // Compose is enqueued in the SAME transaction as the last scene's success (plan §3) — never missed, never doubled.
-    const pending = (db().prepare("SELECT COUNT(*) AS n FROM scenes WHERE version_id = ? AND status <> 'succeeded'").get(input.versionId) as { n: number }).n;
+    const pending = (db().prepare("SELECT COUNT(*) AS n FROM scenes WHERE version_id = ? AND status NOT IN ('succeeded','reused')").get(input.versionId) as { n: number }).n;
     const v = db().prepare("SELECT status FROM ad_versions WHERE id = ?").get(input.versionId) as { status: string };
     if (pending === 0 && v.status === "generating") {
       db().prepare("UPDATE ad_versions SET status = 'composing', updated_at = ? WHERE id = ?").run(now(), input.versionId);

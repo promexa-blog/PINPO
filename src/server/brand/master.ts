@@ -135,3 +135,57 @@ export function assertBrandDeletable(brandKitId: string): void {
   if (!kit) throw new AppError("NOT_FOUND", "Brand kit not found", 404);
   if (kit.is_master) throw new AppError("BRAND_PROTECTED", "The DemandMesh master brand can't be deleted.", 409);
 }
+
+// ---------------- protected editing (plan §3) ----------------
+
+/** Unlock window: edits are accepted only shortly after an explicit unlock. */
+const UNLOCK_MS = 10 * 60_000;
+
+export function unlockBrand(brandKitId: string): { unlockedUntil: number } {
+  const until = now() + UNLOCK_MS;
+  const r = db().prepare("UPDATE brand_kits SET locked = 0, updated_at = ? WHERE id = ?").run(now(), brandKitId);
+  if (r.changes !== 1) throw new AppError("NOT_FOUND", "Brand kit not found", 404);
+  db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(`brand_unlock:${brandKitId}`, String(until));
+  return { unlockedUntil: until };
+}
+
+/** Copy fields DemandMesh may change. Colours, logo files and website are identity — not editable here. */
+export interface BrandCopyPatch {
+  tagline?: string;
+  groupBuyLine?: string;
+  approvedCtas?: Record<"en" | "ml" | "hi", string[]>;
+  social?: Record<string, string>;
+  note?: string;
+}
+
+export function updateBrandCopy(brandKitId: string, patch: BrandCopyPatch): MasterBrand {
+  return tx(() => {
+    const kit = db().prepare("SELECT locked FROM brand_kits WHERE id = ?").get(brandKitId) as { locked: number } | undefined;
+    if (!kit) throw new AppError("NOT_FOUND", "Brand kit not found", 404);
+    const until = Number((db().prepare("SELECT value FROM settings WHERE key = ?").get(`brand_unlock:${brandKitId}`) as { value: string } | undefined)?.value ?? 0);
+    if (kit.locked || until < now()) {
+      db().prepare("UPDATE brand_kits SET locked = 1 WHERE id = ?").run(brandKitId);
+      throw new AppError("BRAND_LOCKED", "Brand settings are locked. Unlock them first.", 423);
+    }
+    const current = getMasterBrand();
+    if (!current || current.id !== brandKitId) throw new AppError("NOT_FOUND", "Brand kit not found", 404);
+    const tokens: BrandTokens = {
+      ...current.tokens,
+      ...(patch.tagline !== undefined ? { tagline: patch.tagline } : {}),
+      ...(patch.groupBuyLine !== undefined ? { groupBuyLine: patch.groupBuyLine } : {}),
+      ...(patch.approvedCtas ? { approvedCtas: patch.approvedCtas } : {}),
+      ...(patch.social ? { social: patch.social } : {}),
+    };
+    const number = current.revisionNumber + 1;
+    const revId = newId("brv");
+    db().prepare("INSERT INTO brand_kit_revisions (id, brand_kit_id, number, tokens_json, note, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(revId, brandKitId, number, JSON.stringify(tokens), patch.note ?? null, now());
+    // Saving re-locks. Existing versions keep the revision they were made with.
+    db().prepare("UPDATE brand_kits SET current_revision_id = ?, locked = 1, updated_at = ? WHERE id = ?").run(revId, now(), brandKitId);
+    db().prepare("DELETE FROM settings WHERE key = ?").run(`brand_unlock:${brandKitId}`);
+    return getMasterBrand()!;
+  });
+}
+
+export function brandRevisions(brandKitId: string) {
+  return db().prepare("SELECT id, number, note, created_at FROM brand_kit_revisions WHERE brand_kit_id = ? ORDER BY number DESC").all(brandKitId) as { id: string; number: number; note: string | null; created_at: number }[];
+}

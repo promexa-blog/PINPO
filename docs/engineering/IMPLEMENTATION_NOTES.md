@@ -71,3 +71,20 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - **Logo/outro accuracy:** the final's outro hold frame is compared with the expected official render, zoomed to 1.02 to match the end of the logo reveal. It must reach SSIM ≥ 0.97 on the full frame, and the measured value is stored as QA evidence. *Deviation:* the plan says logo-region SSIM ≥ 0.98. Full-frame is used because the logo's exact box isn't exported from the layout. The pinned-hash check still guarantees the right file.
 - **Colour compliance** is enforced at render input: every brand-layer colour must be a token. The plan's extra check, sampling overlay pixels with ΔE ≤ 3, is **not implemented**. It adds little, because overlays are rendered from tokens onto solid panels.
 - **Bug found and fixed:** in Zod 4, `z.record(LangEnum, …)` requires **all** keys, so the editor would have rejected scenes with overlays in only one language. It is now `z.partialRecord`, with a regression test.
+
+## Phase 8 — product UI completion
+- **Versions:**
+  - "New version from this" copies the brief, claims (with new IDs, and overlay lines re-pointed to them), scenes and voiceovers into a new draft. Earlier versions and their finals are never changed.
+  - The overview has a version switcher. A non-current version can be deleted.
+  - There is only one draft per ad, so forking again returns the existing draft.
+- **Clip reuse at $0:** Generate looks up the scene's `inputs_hash` anywhere in the same ad and reuses a finished clip, so no fal call is made. When every scene is reused (finishing-only edits such as outro, music or voiceover), the version goes straight to compose. Test I16: 0 scene jobs, $0 estimated, a new final, and the old final kept.
+- **Brand settings:**
+  - Copy fields are editable after an explicit unlock that lasts 10 minutes: tagline, group-buy line, approved CTAs in EN/ML/HI, and social.
+  - Saving creates a revision and re-locks. Existing versions keep their revision.
+  - Colours, logo files and website are identity and can't be edited here.
+  - The master brand can't be deleted (B1/B2).
+- **Library:** search and status filter (server-rendered), duplicate, and soft delete.
+- **Templates:** a list of built-in and user templates. *Save as template* keeps the **structure** (roles, timing weights, scene types, layouts, overlay sources) and never the product copy. User templates can be deleted; built-ins can't.
+- **Storage:** a daily GC job and a "Free up space" button. GC purges ads deleted more than 7 days ago, removes unreferenced assets after 24 hours (official and seed assets are never removed), and caps the cache at 5 GB (LRU). There is also a "Back up database now" button.
+- **Settings:** studio status, storage use, spend by month (estimated / calculated / possible extra / confirmed, kept separate), and model check dates with a warning after 30 days.
+- **Observed once, not reproducible:** right after many new route files were created, the dev server went into a "Compiled in 1ms" reload loop on one page. It didn't recur after a restart, and data/storage/SQLite writes were tested and ruled out as the trigger. Worth watching during development; it doesn't affect production builds.

@@ -8,7 +8,7 @@ import { Button, Field, Input, Select, api } from "./ui";
 export function NewAdForm({ templates }: { templates: { key: string; name: string; description: string; platforms: string[] }[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [templateKey, setTemplateKey] = useState(templates[0]?.key ?? "");
+  const [templateKey, setTemplateKey] = useState(templates.find((t) => t.key === "product_showcase")?.key ?? templates[0]?.key ?? "");
   const [platform, setPlatform] = useState<PlatformKey>("instagram_reels");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

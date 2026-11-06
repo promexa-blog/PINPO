@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { VersionView } from "@/server/views";
 import { PLATFORMS } from "@/lib/platforms";
 import { Button, Checkbox, Section, Status, api, usd } from "./ui";
@@ -34,7 +35,8 @@ const CHECK_LABEL: Record<string, string> = {
   fabricated_testimonial: "Testimonials",
 };
 
-export function Overview({ versionId }: { versionId: string }) {
+export function Overview({ versionId, adId }: { versionId: string; adId: string }) {
+  const router = useRouter();
   const [view, setView] = useState<VersionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,6 +85,71 @@ export function Overview({ versionId }: { versionId: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="grid gap-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="version-switch" className="text-sm font-semibold">
+            Version
+          </label>
+          <select
+            id="version-switch"
+            value={v.id}
+            onChange={(e) => void act(async () => {
+              await api(`/api/ads/${adId}`, { method: "PATCH", body: JSON.stringify({ currentVersionId: e.target.value }) });
+              router.refresh();
+            })}
+            className="min-h-11 rounded-lg border border-dm-border bg-dm-bg px-3 text-sm"
+          >
+            {(view.versions as { id: string; number: number; status: string }[]).map((x) => (
+              <option key={x.id} value={x.id}>
+                v{x.number} — {x.status}
+              </option>
+            ))}
+          </select>
+          {!running ? (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void act(async () => {
+                const r = await fetch(`/api/versions/${versionId}/fork`, { method: "POST" });
+                const body = (await r.json()) as { versionId?: string };
+                if (!body.versionId) throw new Error("Couldn't create a new version.");
+                router.push(`/ads/${adId}/edit`);
+              })}
+            >
+              {v.status === "draft" ? "Edit draft" : "New version from this"}
+            </Button>
+          ) : null}
+          <Button
+            variant="quiet"
+            disabled={busy}
+            onClick={() => {
+              const name = window.prompt("Template name", `${view.ad.name} layout`);
+              if (name) void act(async () => {
+                await api(`/api/versions/${versionId}/save-as-template`, { method: "POST", body: JSON.stringify({ name }) });
+                window.alert("Saved. It appears in the template list for new ads.");
+              });
+            }}
+          >
+            Save as template
+          </Button>
+          {(view.versions as unknown[]).length > 1 && !running ? (
+            <Button
+              variant="quiet"
+              disabled={busy}
+              onClick={() => {
+                const other = (view.versions as { id: string }[]).find((x) => x.id !== v.id);
+                if (other && window.confirm(`Delete version ${v.number}? Its video and QA records are removed.`))
+                  void act(async () => {
+                    await api(`/api/ads/${adId}`, { method: "PATCH", body: JSON.stringify({ currentVersionId: other.id }) });
+                    await fetch(`/api/versions/${versionId}`, { method: "DELETE" });
+                    router.refresh();
+                  });
+              }}
+            >
+              Delete this version
+            </Button>
+          ) : null}
+        </div>
+
         <Section
           title={`Version ${v.number}`}
           description={`${p.label} · ${p.aspect} · ${view.settings.lengthS}s · ${view.settings.resolution}`}
@@ -112,10 +179,11 @@ export function Overview({ versionId }: { versionId: string }) {
                   <p className="text-sm font-bold">
                     {i + 1}. {s.label}
                   </p>
-                  <Status tone={s.status === "succeeded" ? "ok" : s.status === "failed" ? "bad" : "neutral"}>{s.status === "succeeded" ? "Ready" : s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? s.job.stage : "Waiting"}</Status>
+                  <Status tone={s.status === "succeeded" || s.status === "reused" ? "ok" : s.status === "failed" ? "bad" : "neutral"}>{s.status === "succeeded" || s.status === "reused" ? "Ready" : s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? s.job.stage : "Waiting"}</Status>
                 </div>
                 <p className="mt-1 text-xs text-dm-secondary">
                   {s.durationS.toFixed(1)}s · {s.sceneType === "product_original" ? "original product photo" : "AI video"}
+                  {s.status === "reused" ? " · reused from an earlier version ($0)" : ""}
                   {s.job && s.job.attempt > 1 ? ` · attempt ${s.job.attempt} of ${s.job.max_attempts}` : ""}
                   {s.job?.queue_position ? ` · queue position ${s.job.queue_position}` : ""}
                 </p>

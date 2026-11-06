@@ -2,6 +2,7 @@ import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { backup } from "@/server/db";
 import { paths } from "@/server/paths";
+import { collectGarbage } from "@/server/storage/gc";
 import type { JobHandler } from "../types";
 
 /** Housekeeping jobs: daily DB backup and stale work-dir cleanup. GC of assets arrives with versions (Phase 8). */
@@ -13,6 +14,9 @@ export const maintenanceHandler: JobHandler = {
     const result: Record<string, unknown> = {};
     if (input.task === "backup" || input.task === "all") {
       result.backup = backup();
+    }
+    if (input.task === "gc" || input.task === "all") {
+      result.gc = await collectGarbage();
     }
     if (input.task === "clean_work" || input.task === "all") {
       result.removed = await cleanStaleWork(6 * 60 * 60 * 1000);

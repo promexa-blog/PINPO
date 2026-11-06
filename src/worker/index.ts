@@ -64,7 +64,9 @@ async function main(): Promise<void> {
   await wipeWorkDir();
   await seedMasterBrand();
   seedTemplates();
-  enqueue({ type: "maintenance", idempotencyKey: `maintenance:backup:${new Date().toISOString().slice(0, 10)}`, input: { task: "backup" }, priority: 200 });
+  const day = new Date().toISOString().slice(0, 10);
+  enqueue({ type: "maintenance", idempotencyKey: `maintenance:backup:${day}`, input: { task: "backup" }, priority: 200 });
+  enqueue({ type: "maintenance", idempotencyKey: `maintenance:gc:${day}`, input: { task: "gc" }, priority: 210 });
 
   let rendererVersion: string | null = null;
   try {

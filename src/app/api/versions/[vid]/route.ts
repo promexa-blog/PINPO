@@ -1,5 +1,6 @@
 import { route, readJson } from "@/server/http";
 import { patchDraft } from "@/server/db/repos/versions";
+import { deleteVersion } from "@/server/db/repos/lifecycle";
 import { versionView } from "@/server/views";
 import { VersionPatch } from "@/lib/version";
 
@@ -22,4 +23,11 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
   const patch = await readJson(req, VersionPatch, 1024 * 1024);
   const v = patchDraft(vid, patch);
   return Response.json({ revision: v.revision });
+});
+
+/** Delete a non-current, non-running version (plan §4). */
+export const DELETE = route(async (_req: Request, ctx: Ctx) => {
+  const { vid } = await ctx.params;
+  deleteVersion(vid);
+  return new Response(null, { status: 204 });
 });

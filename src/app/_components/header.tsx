@@ -5,7 +5,7 @@ export function StudioHeader({ crumb }: { crumb?: { href: string; label: string 
   const brand = getMasterBrand();
   const logo = brand?.logos.find((l) => l.variant === "horizontal");
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-dm-border py-4">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-dm-border py-3">
       <div className="flex min-w-0 items-center gap-3">
         <Link href="/" className="flex items-center gap-3" aria-label="DemandMesh Ad Studio — all ads">
           {logo ? (
@@ -27,6 +27,18 @@ export function StudioHeader({ crumb }: { crumb?: { href: string; label: string 
           </>
         ) : null}
       </div>
+      <nav aria-label="Studio" className="flex gap-1 text-sm">
+        {[
+          ["/", "Ads"],
+          ["/brand", "Brand"],
+          ["/templates", "Templates"],
+          ["/settings", "Settings"],
+        ].map(([href, label]) => (
+          <Link key={href} href={href!} className="min-h-11 content-center rounded-lg px-3 font-semibold hover:bg-dm-surface">
+            {label}
+          </Link>
+        ))}
+      </nav>
     </header>
   );
 }

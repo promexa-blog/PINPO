@@ -11,6 +11,9 @@ import { startGenerate, cancelVersion } from "@/server/jobs/generate";
 import { storeUpload } from "@/server/storage/upload";
 import { UploadMeta } from "@/lib/schemas";
 import { costSummary } from "@/server/jobs/costs";
+import { forkVersion } from "@/server/db/repos/lifecycle";
+import { saveAsTemplate } from "@/server/planning/save-template";
+import { getTemplate } from "@/server/planning/templates";
 import { getItems, exportGate, acknowledge, attest } from "@/server/qa/reports";
 import { getAsset, absolutePath } from "@/server/storage/assets";
 import { probe } from "@/server/media/probe";
@@ -189,6 +192,32 @@ describe("vertical slice pipeline (mock fal)", () => {
     const tech = getItems(versionId).find((i) => i.check === "technical_loudness");
     expect(tech?.status).toBe("pass");
   }, 300_000);
+
+  it("re-composes a finishing-only change with 0 new fal jobs and keeps the old final (I16) + save as template", async () => {
+    ensureWorker();
+    const v1 = await makeAd("reuse");
+    await startGenerate(v1);
+    await waitFor(() => ["ready", "failed"].includes(requireVersion(v1).status), 240_000, "v1");
+    const oldFinal = requireVersion(v1).final_asset_id!;
+    const fork = forkVersion(v1);
+    expect(fork.created).toBe(true);
+    const v2 = requireVersion(fork.versionId);
+    const finishing = JSON.parse(v2.finishing_json);
+    patchDraft(fork.versionId, { revision: v2.revision, finishing: { ...finishing, outroType: "minimal" } });
+    const r = await startGenerate(fork.versionId);
+    expect(r.jobs).toBe(0);
+    expect(r.reused).toBeGreaterThan(0);
+    await waitFor(() => ["ready", "failed"].includes(requireVersion(fork.versionId).status), 240_000, "v2");
+    expect(requireVersion(fork.versionId).status).toBe("ready");
+    expect(requireVersion(fork.versionId).final_asset_id).not.toBe(oldFinal);
+    expect(getAsset(oldFinal)).toBeDefined();
+    expect((db().prepare("SELECT COUNT(*) AS n FROM jobs WHERE version_id = ? AND type = 'scene_generate'").get(fork.versionId) as { n: number }).n).toBe(0);
+    expect(costSummary(fork.versionId).estimated).toBe(0);
+    const t = saveAsTemplate(v1, "Lunch box layout");
+    const tpl = getTemplate(t.key)!;
+    expect(tpl.scenes.length).toBe(requireVersion(v1) ? 4 : 0);
+    expect(JSON.stringify(tpl)).not.toContain("Three separate tiers"); // structure, not copy
+  }, 600_000);
 
   it("retries a failing fal run and records failed-attempt exposure (I9, C3)", async () => {
     ensureWorker();

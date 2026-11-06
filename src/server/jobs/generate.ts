@@ -47,7 +47,7 @@ export class DraftNotReady extends AppError {
 }
 
 /** POST /generate (plan §4): validate, check disk, lock the version, enqueue scene jobs + estimates. Idempotent. */
-export async function startGenerate(versionId: string): Promise<{ versionId: string; jobs: number }> {
+export async function startGenerate(versionId: string): Promise<{ versionId: string; jobs: number; reused?: number }> {
   const v0 = requireVersion(versionId);
   if (v0.status !== "draft") return { versionId, jobs: 0 }; // already generating/generated → idempotent
   const check = checkDraft(versionId);
@@ -65,6 +65,7 @@ export async function startGenerate(versionId: string): Promise<{ versionId: str
     const rows = getScenes(versionId);
     const brief = getBrief(versionId);
     let jobs = 0;
+    let reused = 0;
     rows.forEach((row, i) => {
       const s = scenes[i]!;
       const ai = s.sceneType !== "product_original";
@@ -94,6 +95,18 @@ export async function startGenerate(versionId: string): Promise<{ versionId: str
         pricingDate: date,
       };
       const inputsHash = sha256(stableStringify({ ...input, versionId: undefined, sceneId: undefined, position: undefined, pricingDate: undefined, product: product?.sha256 }));
+      // Clip reuse (plan §3): identical inputs anywhere in this ad → reuse the clip at $0, no fal call.
+      const reuse = db()
+        .prepare(
+          `SELECT s.id, s.clip_asset_id FROM scenes s JOIN ad_versions av ON av.id = s.version_id
+           WHERE av.ad_id = ? AND s.inputs_hash = ? AND s.status IN ('succeeded','reused') AND s.clip_asset_id IS NOT NULL AND s.version_id <> ? LIMIT 1`,
+        )
+        .get(v.ad_id, inputsHash, versionId) as { id: string; clip_asset_id: string } | undefined;
+      if (reuse && getAsset(reuse.clip_asset_id)) {
+        db().prepare("UPDATE scenes SET status = 'reused', inputs_hash = ?, clip_asset_id = ?, reused_from_scene_id = ? WHERE id = ?").run(inputsHash, reuse.clip_asset_id, reuse.id, row.id);
+        reused++;
+        return;
+      }
       db().prepare("UPDATE scenes SET status = 'pending', inputs_hash = ? WHERE id = ?").run(inputsHash, row.id);
       enqueue({ type: "scene_generate", idempotencyKey: `scene:${row.id}:a1`, versionId, sceneId: row.id, input, priority: 50 + i, maxAttempts: 3 });
       jobs++;
@@ -104,8 +117,13 @@ export async function startGenerate(versionId: string): Promise<{ versionId: str
     });
     const settingsHash = sha256(stableStringify({ settings, platform: v.platform, pacing: v.pacing, finishing: v.finishing_json }));
     db().prepare("UPDATE ad_versions SET status = 'generating', locked_at = ?, settings_hash = ?, updated_at = ? WHERE id = ?").run(now(), settingsHash, now(), versionId);
+    if (jobs === 0) {
+      // Every scene reused (e.g. only finishing changed): straight to compose, no AI cost.
+      db().prepare("UPDATE ad_versions SET status = 'composing', updated_at = ? WHERE id = ?").run(now(), versionId);
+      enqueue({ type: "compose", idempotencyKey: `compose:${versionId}`, versionId, input: { versionId }, priority: 20, maxAttempts: 2 });
+    }
     db().prepare("UPDATE ads SET updated_at = ? WHERE id = ?").run(now(), v.ad_id);
-    return { versionId, jobs };
+    return { versionId, jobs, reused };
   });
 }
 

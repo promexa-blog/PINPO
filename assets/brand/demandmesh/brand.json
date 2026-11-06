@@ -1,0 +1,57 @@
+{
+  "name": "DemandMesh",
+  "website": "demandmesh.shop",
+  "tagline": "Where demands connects.",
+  "social": { "instagram": "@demandmesh" },
+  "colors": {
+    "primary": "#0C1C28",
+    "primaryHover": "#162B3A",
+    "secondary": "#526979",
+    "secondaryLight": "#E8EEF1",
+    "background": "#FFFFFF",
+    "surface": "#F7F9FA",
+    "border": "#E1E7EA",
+    "white": "#FFFFFF",
+    "black": "#000000"
+  },
+  "typography": {
+    "fontKeys": { "en": ["latin"], "ml": ["malayalam", "latin"], "hi": ["devanagari", "latin"] },
+    "fontsTemporary": true,
+    "scale": { "headline": 5.2, "subheadline": 3.0, "body": 2.4, "cta": 2.8, "caption": 2.0 },
+    "scaleUnit": "percent_of_frame_height",
+    "weights": { "regular": 400, "semibold": 600, "bold": 700 },
+    "lineHeight": { "headline": 1.15, "body": 1.3 },
+    "letterSpacing": { "latin": "-0.01em", "indic": "0" }
+  },
+  "spacing": { "unit": 0.74, "unitBasis": "percent_of_frame_width", "grid": 8 },
+  "cta": {
+    "shape": "pill",
+    "minHeight": 6.0,
+    "minHeightUnit": "percent_of_frame_height",
+    "paddingXUnits": 4,
+    "default": { "background": "primary", "text": "white" },
+    "inverse": { "background": "secondaryLight", "text": "primary" },
+    "arrow": true
+  },
+  "motion": {
+    "fade-up": { "duration": 0.45, "ease": "ease-out", "rise": 3.0 },
+    "slide-in": { "duration": 0.5, "ease": "ease-out" },
+    "scale-in": { "duration": 0.4, "from": 0.96 },
+    "logo-reveal": { "duration": 0.6, "from": 0.98 },
+    "exit": { "duration": 0.3 }
+  },
+  "logo": {
+    "horizontal": {
+      "file": "demandmesh-horizontal-304x62.png",
+      "sha256": "ee313ede8d0103388cfc091334739548f105d7595a43764c0c9745e0d1822368",
+      "origin": "https://demandmesh.shop/brand/demandmesh/demandmesh-horizontal-trimmed-304x62.png",
+      "temporary": true,
+      "maxScale": 1.25
+    }
+  },
+  "approvedCtas": {
+    "en": ["Shop now on demandmesh.shop", "Join the group buy", "Buy together for less", "Shop now"],
+    "ml": [],
+    "hi": []
+  }
+}

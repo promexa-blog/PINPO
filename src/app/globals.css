@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* DemandMesh brand tokens (plan §3 / §13). Studio chrome uses only these. */
+@theme {
+  --color-dm-primary: #0C1C28;
+  --color-dm-hover: #162B3A;
+  --color-dm-secondary: #526979;
+  --color-dm-secondary-light: #E8EEF1;
+  --color-dm-bg: #FFFFFF;
+  --color-dm-surface: #F7F9FA;
+  --color-dm-border: #E1E7EA;
+  --font-sans: var(--font-pinpo), system-ui, sans-serif;
+}
+
+html { background: var(--color-dm-bg); color: var(--color-dm-primary); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+:focus-visible { outline: 2px solid var(--color-dm-primary); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

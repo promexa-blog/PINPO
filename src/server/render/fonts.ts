@@ -14,7 +14,7 @@ export interface FontFace {
   sha256: string;
 }
 
-/** Bundled placeholder fonts (OFL 1.1). Swap files + hashes here when DemandMesh's approved fonts arrive. */
+/** Bundled placeholder fonts (OFL 1.1). Swap files + hashes here to change the studio's type family. */
 export const FONTS: Record<FontFace["key"], FontFace> = {
   latin: {
     key: "latin",

@@ -6,7 +6,7 @@ import { db, quickCheck, closeDb } from "@/server/db";
 import { paths, ensureDirs, SOURCE_ROOT } from "@/server/paths";
 import { enqueue, releaseAll } from "@/server/jobs/queue";
 import { acquireWorkerLease, heartbeat, releaseWorkerLease, getWorker, WORKER_HEARTBEAT_MS } from "@/server/jobs/worker-lease";
-import { seedMasterBrand } from "@/server/brand/master";
+import { seedBundledBrand } from "@/server/brand/kits";
 import { seedTemplates } from "@/server/planning/templates";
 import { renderer } from "@/server/render/browser";
 import { createScheduler } from "./loop";
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     process.exit(3);
   }
   await wipeWorkDir();
-  await seedMasterBrand();
+  await seedBundledBrand();
   seedTemplates();
   const day = new Date().toISOString().slice(0, 10);
   enqueue({ type: "maintenance", idempotencyKey: `maintenance:backup:${day}`, input: { task: "backup" }, priority: 200 });

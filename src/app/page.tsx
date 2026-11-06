@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMasterBrand } from "@/server/brand/master";
+import { getDefaultBrand } from "@/server/brand/kits";
 import { listAds } from "@/server/db/repos/versions";
 import { db } from "@/server/db";
 import { seedTemplates } from "@/server/planning/templates";
@@ -24,7 +24,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const { q = "", status = "" } = await searchParams;
   seedTemplates();
-  const brand = getMasterBrand();
+  const brand = getDefaultBrand();
   const all = brand ? listAds() : [];
   const ads = all.filter((a) => (!q || a.name.toLowerCase().includes(q.toLowerCase())) && (!status || a.status === status));
   const templates = (db().prepare("SELECT key, name, description, platforms_json FROM templates ORDER BY builtin DESC, name").all() as { key: string; name: string; description: string; platforms_json: string }[]).map((t) => ({
@@ -41,7 +41,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Ads</h1>
-            <p className="mt-1 text-sm text-dm-secondary">Every DemandMesh ad you&apos;ve made, newest first.</p>
+            <p className="mt-1 text-sm text-dm-secondary">Every ad you&apos;ve made, newest first.</p>
           </div>
         </div>
 
@@ -49,7 +49,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
           <h2 id="new-ad" className="sr-only">
             New ad
           </h2>
-          {brand ? <NewAdForm templates={templates} /> : <p className="rounded-xl border border-dm-border bg-dm-surface p-4 text-sm">Start the studio with <code>npm run dev</code> — the worker sets up the DemandMesh brand on first run.</p>}
+          {brand ? <NewAdForm templates={templates} /> : <p className="rounded-xl border border-dm-border bg-dm-surface p-4 text-sm">Start the studio with <code>npm run dev</code> — then add a brand.</p>}
         </section>
 
         <form className="mt-8 flex flex-wrap items-end gap-3" role="search">

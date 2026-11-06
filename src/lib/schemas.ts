@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** Shared (client + server) validation schemas. No server imports here. */
 
-export const UploadPurpose = z.enum(["product_image", "frame_image", "music", "voiceover"]);
+export const UploadPurpose = z.enum(["product_image", "frame_image", "music", "voiceover", "brand_logo"]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
 export const CommercialUse = z.enum(["yes", "no", "unknown"]);
@@ -30,7 +30,7 @@ export const ProvenanceInput = z.object({
   licenseExpiresAt: z.number().int().positive().optional().nullable(),
   talentConsent: z.boolean().optional(),
   proofNote: optText(500),
-  /** Product images: "I have permission to use this image in DemandMesh ads." */
+  /** Product images: "I have permission to use this image in my ads." */
   permissionConfirmed: z.boolean().optional(),
 });
 export type ProvenanceInput = z.infer<typeof ProvenanceInput>;
@@ -52,7 +52,11 @@ export const UploadMeta = z
     }
     if (purpose === "product_image") {
       need(p.sourceType === "own_photo" || p.sourceType === "product_supplier", "sourceType", "Product images must be your own photo or from the product supplier.");
-      need(p.permissionConfirmed === true, "permissionConfirmed", "Confirm you have permission to use this image in DemandMesh ads.");
+      need(p.permissionConfirmed === true, "permissionConfirmed", "Confirm you have permission to use this image in your ads.");
+    }
+    if (purpose === "brand_logo") {
+      need(p.sourceType === "official_brand", "sourceType", "Logos must be the brand's own official file.");
+      need(p.permissionConfirmed === true, "permissionConfirmed", "Confirm this is the brand's official logo and you may use it.");
     }
     if (p.attributionText === undefined && /CC BY/i.test(p.license ?? "")) {
       need(false, "attributionText", "This licence requires an attribution credit.");
@@ -63,6 +67,9 @@ export type UploadMeta = z.infer<typeof UploadMeta>;
 export const UPLOAD_LIMITS = {
   imageMaxBytes: 10 * 1024 * 1024,
   imageMinSide: 300,
+  /** Logos are wide and short: only the longer side has a minimum. */
+  logoMinLongSide: 160,
+  logoMinShortSide: 24,
   imageMaxPixels: 40_000_000,
   audioMaxBytes: 20 * 1024 * 1024,
   audioMaxSeconds: 600,

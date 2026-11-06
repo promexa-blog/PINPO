@@ -4,7 +4,8 @@ import path from "node:path";
 import { db, tx } from "@/server/db";
 import { paths } from "@/server/paths";
 import { PLATFORMS } from "@/lib/platforms";
-import { getMasterBrand } from "@/server/brand/master";
+import { brandForVersion, type Brand } from "@/server/brand/kits";
+import { contrastRatio, WEBSITE } from "@/lib/color";
 import { renderOverlay, renderOutro, frameFor, officialLogo, brandColors, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
 import { offerLine, formatInr } from "@/server/brief/offers";
 import { groupBuyLines } from "@/server/planning/storyboard";
@@ -72,7 +73,7 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   const settings = settingsOf(v);
   const finishing = finishingOf(v);
   const brief = getBrief(versionId);
-  const brand = getMasterBrand()!;
+  const brand = brandForVersion(versionId);
   const frame = frameFor(v.platform);
   const { width: W, height: H } = frame;
   const rows = getScenes(versionId);
@@ -223,12 +224,12 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
     width: W,
     height: H,
     durationS: tech.info?.durationS ?? tl.totalS,
-    originalName: `demandmesh_${brief.product.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}_${v.platform}_${W}x${H}_v${v.number}.mp4`,
-    provenance: { sourceType: "rendered", origin: `PINPO compose of version ${versionId}`, license: "Proprietary – DemandMesh", commercialUse: "yes", rightsHolder: "DemandMesh" },
+    originalName: `${slug(brand.tokens.name) || "ad"}_${slug(brief.product.name)}_${v.platform}_${W}x${H}_v${v.number}.mp4`,
+    provenance: { sourceType: "rendered", origin: `PINPO compose of version ${versionId}`, license: `Proprietary – ${brand.tokens.name}`, commercialUse: "yes", rightsHolder: brand.tokens.name },
   });
   const thumbFile = path.join(dir, "thumb.jpg");
   await thumbnail(absolutePath(final), Math.min(1.5, tl.totalS / 3), thumbFile);
-  const thumb = await putFile(thumbFile, { kind: "image", mime: "image/jpeg", ext: "jpg", source: "derived", width: 480, provenance: { sourceType: "rendered", commercialUse: "yes", license: "Proprietary – DemandMesh" } });
+  const thumb = await putFile(thumbFile, { kind: "image", mime: "image/jpeg", ext: "jpg", source: "derived", width: 480, provenance: { sourceType: "rendered", commercialUse: "yes", license: `Proprietary – ${brand.tokens.name}` } });
 
   // Logo/outro accuracy: the final's outro frame must match the expected official render (plan §9).
   const outroMatch = await outroFrameSsim(absolutePath(final), outroPng.file, tl.totalS - 0.15, W, H, dir);
@@ -251,7 +252,7 @@ async function creativeItems(a: {
   scenes: ReturnType<typeof draftScenes>;
   rows: ReturnType<typeof getScenes>;
   brief: ReturnType<typeof getBrief>;
-  brand: NonNullable<ReturnType<typeof getMasterBrand>>;
+  brand: Brand;
   lang: "en" | "ml" | "hi";
   overlays: { startS: number; endS: number; words: number; scene: number }[];
   timeline: ReturnType<typeof timelineFor>;
@@ -266,23 +267,27 @@ async function creativeItems(a: {
   const { brand, v } = a;
   const frame = frameFor(v.platform);
 
-  // Logo accuracy: pinned hash verified at render; low-res temporary logo is a warning.
+  // Logo accuracy: pinned hash verified at render; low-res or missing logo is a warning.
   const logo = officialLogo(brand);
-  const logoRec = brand.logos.find((l) => l.variant === "horizontal")!;
+  const logoRec = brand.logos.find((l) => l.variant === "horizontal");
   items.push({
     check: "logo_accuracy",
     method: "automated",
     status: a.outroSsim >= 0.97 ? "pass" : "fail",
-    message: `Official logo used (sha256 ${logo.asset.sha256.slice(0, 12)}…, pinned); outro frame matches the expected render (SSIM ${a.outroSsim.toFixed(3)}).`,
+    message: logo
+      ? `Official logo used (sha256 ${logo.asset.sha256.slice(0, 12)}…, pinned); outro frame matches the expected render (SSIM ${a.outroSsim.toFixed(3)}).`
+      : `No logo file — the outro sets "${brand.tokens.name}" as a text wordmark; outro frame matches the expected render (SSIM ${a.outroSsim.toFixed(3)}).`,
     evidence: { ssim: a.outroSsim },
   });
-  if (logoRec.temporary || logo.width * logo.maxScale < safeBox(frame).width * 0.45) {
-    items.push({ check: "logo_accuracy", method: "automated", status: "warn", message: `Logo is the temporary ${logo.width}×${logo.height} file — it can't be shown larger than ${Math.round(logo.width * logo.maxScale)} px. Replace it with the official high-res logo.` });
+  if (!logo) {
+    items.push({ check: "logo_accuracy", method: "automated", status: "warn", message: `${brand.tokens.name} has no logo yet, so the outro uses a text wordmark. Add a logo on the Brands page for future versions.` });
+  } else if (logoRec?.temporary || logo.width * logo.maxScale < safeBox(frame).width * 0.45) {
+    items.push({ check: "logo_accuracy", method: "automated", status: "warn", message: `The logo file is small (${logo.width}×${logo.height}) — it can't be shown larger than ${Math.round(logo.width * logo.maxScale)} px. Upload a higher-resolution logo.` });
   }
 
   // Brand colours: all brand-layer colours come from tokens (enforced at render).
   const colors = brandColors(brand);
-  items.push({ check: "brand_color_compliance", method: "automated", status: "pass", message: `Overlays, CTA and outro use only DemandMesh tokens (${Object.values(colors).slice(0, 4).join(", ")}…).` });
+  items.push({ check: "brand_color_compliance", method: "automated", status: "pass", message: `Overlays, CTA and outro use only ${brand.tokens.name} brand colours (${Object.values(colors).slice(0, 4).join(", ")}…).` });
 
   // Text readability: solid token panels → computed contrast; minimum size; reading time.
   const contrast = contrastRatio(colors.primary, colors.white);
@@ -312,9 +317,9 @@ async function creativeItems(a: {
 
   // CTA presence + end card.
   items.push({ check: "cta_presence", method: "automated", status: a.ctaText ? "pass" : "fail", message: a.ctaText ? `CTA "${a.ctaText}" in the outro.` : "No call to action." });
-  const outroOk = brand.tokens.website === "demandmesh.shop" && OUTRO_S >= 2.5 && OUTRO_S <= 4;
+  const outroOk = WEBSITE.test(brand.tokens.website) && OUTRO_S >= 2.5 && OUTRO_S <= 4;
   const outroName = { standard: "Standard", promotional: "Promotional", product: "Product-specific", minimal: "Minimal logo" }[a.outroType];
-  items.push({ check: "end_card_correctness", method: "automated", status: outroOk ? "pass" : "fail", message: `${outroName} DemandMesh outro: official logo, "demandmesh.shop", ${OUTRO_S}s.` });
+  items.push({ check: "end_card_correctness", method: "automated", status: outroOk ? "pass" : "fail", message: `${outroName} outro: ${logo ? "official logo" : "brand wordmark"}, "${brand.tokens.website}", ${OUTRO_S}s.` });
   const hasOffer = !!a.brief.offers.priceInr || !!a.brief.offers.groupBuy;
   if ((a.brief.campaign.objective === "sales" || a.brief.campaign.objective === "group_buy") && hasOffer && a.outroType === "minimal") {
     items.push({ check: "end_card_correctness", method: "heuristic", status: "warn", message: "This is a sales ad with an offer, but the outro is the minimal logo version — the Promotional outro would repeat the offer." });
@@ -348,7 +353,7 @@ async function creativeItems(a: {
   }
 
   // Compliance over the actual on-screen text.
-  items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas, brandLines: brandLines() }));
+  items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas, brandLines: brandLines(brand) }));
 
   // Rights gate (plan §8a): commercial use, licence expiry, voice consent, required credits.
   items.push(...rightsItems(usedAssets(a.v.id)));
@@ -362,16 +367,6 @@ function readingWords(lines: { kind: string; text: string }[]): number {
   return (text.trim() ? text.trim().split(/\s+/).length : 0) + offer;
 }
 
-function luminance(hex: string): number {
-  const c = hex.replace("#", "");
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-}
-export function contrastRatio(a: string, b: string): number {
-  const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (l1! + 0.05) / (l2! + 0.05);
-}
-
 /** SSIM of the final's outro hold frame vs the rendered outro PNG at the reveal's end zoom (1.02). */
 async function outroFrameSsim(finalFile: string, outroPng: string, atS: number, W: number, H: number, dir: string): Promise<number> {
   const sharp = (await import("sharp")).default;
@@ -383,3 +378,5 @@ async function outroFrameSsim(finalFile: string, outroPng: string, atS: number, 
   await sharp(outroPng).resize(zw, zh, { kernel: "lanczos3" }).extract({ left: Math.round((zw - W) / 2), top: Math.round((zh - H) / 2), width: W, height: H }).png().toFile(exp);
   return ssimOf(exp, got);
 }
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);

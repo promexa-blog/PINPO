@@ -66,7 +66,7 @@ export function complianceItems(input: ComplianceInput): QaItem[] {
           const expected = line.kind === "tagline" ? input.brandLines?.tagline : input.brandLines?.groupBuyLine;
           if (line.text !== expected) {
             claimFail++;
-            claimMessages.push(`${where}: "${line.text}" isn't the approved DemandMesh line.`);
+            claimMessages.push(`${where}: "${line.text}" isn't the brand's saved line.`);
           }
           continue;
         }

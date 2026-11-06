@@ -1,7 +1,7 @@
 import "../guard";
 import { db } from "../db";
 import { getBrief, getScenes, finishingOf, requireVersion, getVoiceovers } from "../db/repos/versions";
-import { getMasterBrand } from "../brand/master";
+import { brandForVersion } from "../brand/kits";
 import { getAsset } from "../storage/assets";
 import type { UsedAsset } from "./checks/rights";
 
@@ -27,8 +27,7 @@ export function usedAssets(versionId: string): UsedAsset[] {
   }
   push(finishing.musicAssetId, "music");
   for (const vo of getVoiceovers(versionId).filter((x) => !x.muted)) push(vo.assetId, "voiceover");
-  const brand = getMasterBrand();
-  for (const l of brand?.logos ?? []) push(l.assetId, "logo");
+  for (const l of brandForVersion(versionId).logos) push(l.assetId, "logo");
   for (const f of db().prepare("SELECT id FROM assets WHERE source_type = 'font'").all() as { id: string }[]) push(f.id, "font");
   return out;
 }

@@ -173,25 +173,48 @@ export interface OutroProps {
   frame: Frame;
   colors: BrandColors;
   lang: Lang;
-  logo: { src: string; width: number; height: number; maxScale: number };
+  /** Official logo file, or null → the brand name is set as a text wordmark. */
+  logo: { src: string; width: number; height: number; maxScale: number } | null;
+  brandName: string;
   tagline: string;
   cta: string;
   website: string;
 }
 
-/** Standard DemandMesh outro (plan §6): logo, tagline, CTA pill, website on white. */
-export function StandardOutro({ frame, colors, lang, logo, tagline, cta, website }: OutroProps) {
+/** Script of a wordmark so the right font face is used (brand names can be in any of our scripts). */
+export function wordmarkLang(text: string): Lang {
+  if (/[\u0D00-\u0D7F]/.test(text)) return "ml";
+  if (/[\u0900-\u097F]/.test(text)) return "hi";
+  return "en";
+}
+
+/** The official logo at no more than native × maxScale, or a text wordmark when no logo exists. */
+function Logo({ frame, colors, logo, brandName, maxWidth }: { frame: Frame; colors: BrandColors; logo: OutroProps["logo"]; brandName: string; maxWidth: number }) {
+  if (!logo) {
+    const lang = wordmarkLang(brandName);
+    return (
+      <div data-role="logo" style={{ fontFamily: FONT_STACK[lang], fontWeight: 800, color: colors.primary, fontSize: fitSize(px(frame, SCALE.headline * 1.25), brandName, 14), lineHeight: 1.05, letterSpacing: lang === "en" ? "-0.02em" : 0, textAlign: "center", maxWidth }}>
+        {brandName}
+      </div>
+    );
+  }
+  const w = Math.min(Math.round(logo.width * logo.maxScale), Math.round(maxWidth));
+  const h = Math.round((logo.height / logo.width) * w);
+  // eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels
+  return <img data-role="logo" src={logo.src} width={w} height={h} alt={brandName} style={{ display: "block", width: w, height: h }} />;
+}
+
+/** Standard outro (plan §6): logo, tagline, CTA pill, website on white. */
+export function StandardOutro({ frame, colors, lang, logo, brandName, tagline, cta, website }: OutroProps) {
   const box = safeBox(frame);
-  const maxLogoW = Math.min(Math.round(logo.width * logo.maxScale), Math.round(box.width * 0.7));
-  const logoW = maxLogoW;
-  const logoH = Math.round((logo.height / logo.width) * logoW);
   return (
     <div style={abs({ inset: 0, background: colors.white, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: unit(frame, 3) })}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels */}
-      <img data-role="logo" src={logo.src} width={logoW} height={logoH} alt="DemandMesh" style={{ display: "block", width: logoW, height: logoH }} />
-      <div data-role="tagline" style={{ fontFamily: FONT_STACK.en, color: colors.secondary, fontSize: px(frame, SCALE.subheadline), fontWeight: 500 }}>
-        {tagline}
-      </div>
+      <Logo frame={frame} colors={colors} logo={logo} brandName={brandName} maxWidth={box.width * 0.7} />
+      {tagline ? (
+        <div data-role="tagline" style={{ fontFamily: FONT_STACK.en, color: colors.secondary, fontSize: px(frame, SCALE.subheadline), fontWeight: 500, textAlign: "center", maxWidth: box.width }}>
+          {tagline}
+        </div>
+      ) : null}
       <Cta text={cta} frame={frame} colors={colors} lang={lang} />
       <div data-role="website" style={{ fontFamily: FONT_STACK.en, color: colors.primary, fontSize: px(frame, SCALE.body), fontWeight: 700, letterSpacing: "0.01em" }}>
         {website}
@@ -256,15 +279,12 @@ export function productRect(frame: Frame, product: { width: number; height: numb
   return { x: Math.round((W - w) / 2), y: Math.round((H - h) / 2 - H * 0.03), w, h, canvasW: Math.round(W), canvasH: Math.round(H) };
 }
 
-function OutroFooter({ frame, colors, lang, logo, cta, website }: Pick<OutroProps, "frame" | "colors" | "lang" | "logo" | "cta" | "website">) {
+function OutroFooter({ frame, colors, lang, logo, brandName, cta, website }: Pick<OutroProps, "frame" | "colors" | "lang" | "logo" | "brandName" | "cta" | "website">) {
   const box = safeBox(frame);
-  const logoW = Math.min(Math.round(logo.width * logo.maxScale), Math.round(box.width * 0.6));
-  const logoH = Math.round((logo.height / logo.width) * logoW);
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: unit(frame, 2.5) }}>
       <Cta text={cta} frame={frame} colors={colors} lang={lang} />
-      {/* eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels */}
-      <img data-role="logo" src={logo.src} width={logoW} height={logoH} alt="DemandMesh" style={{ display: "block", width: logoW, height: logoH }} />
+      <Logo frame={frame} colors={colors} logo={logo} brandName={brandName} maxWidth={box.width * 0.6} />
       <div data-role="website" style={{ fontFamily: FONT_STACK.en, color: colors.primary, fontSize: px(frame, SCALE.body), fontWeight: 700 }}>
         {website}
       </div>
@@ -304,14 +324,11 @@ export function ProductOutro(props: OutroProps & { product: { src: string; width
 }
 
 /** Minimal logo outro: logo reveal + website on white (inverse only once an official inverse logo exists). */
-export function MinimalOutro({ frame, colors, logo, website }: OutroProps) {
+export function MinimalOutro({ frame, colors, logo, brandName, website }: OutroProps) {
   const box = safeBox(frame);
-  const logoW = Math.min(Math.round(logo.width * logo.maxScale), Math.round(box.width * 0.7));
-  const logoH = Math.round((logo.height / logo.width) * logoW);
   return (
     <div style={abs({ inset: 0, background: colors.white, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: unit(frame, 3) })}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels */}
-      <img data-role="logo" src={logo.src} width={logoW} height={logoH} alt="DemandMesh" style={{ display: "block", width: logoW, height: logoH }} />
+      <Logo frame={frame} colors={colors} logo={logo} brandName={brandName} maxWidth={box.width * 0.7} />
       <div data-role="website" style={{ fontFamily: FONT_STACK.en, color: colors.primary, fontSize: px(frame, SCALE.body), fontWeight: 700 }}>
         {website}
       </div>

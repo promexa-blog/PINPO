@@ -22,7 +22,7 @@ export const GET = route(async (_req: Request, ctx: { params: Promise<{ vid: str
   const asset = getAsset(v.final_asset_id)!;
   const file = absolutePath(asset);
   const { size } = await stat(file);
-  const name = (asset.original_name ?? `demandmesh_v${v.number}.mp4`).replace(/[^\w.\-]+/g, "_");
+  const name = (asset.original_name ?? `ad_v${v.number}.mp4`).replace(/[^\w.\-]+/g, "_");
   return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
     headers: { "Content-Type": "video/mp4", "Content-Length": String(size), "Content-Disposition": `attachment; filename="${name}"`, "X-Content-Type-Options": "nosniff" },
   });

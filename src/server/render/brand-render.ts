@@ -5,8 +5,9 @@ import { pathToFileURL } from "node:url";
 import type { Lang } from "@/lib/brief";
 import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
 import type { BrandColors, Frame } from "@/lib/brand-layout/tokens";
-import { MinimalOutro, OverlayLayer, ProductOutro, ProductStill, PromotionalOutro, StandardOutro, type LayoutVariant, type OverlayLine } from "@/lib/brand-layout/components";
-import type { MasterBrand } from "../brand/master";
+import { MinimalOutro, OverlayLayer, ProductOutro, ProductStill, PromotionalOutro, StandardOutro, wordmarkLang, type LayoutVariant, type OverlayLine } from "@/lib/brand-layout/components";
+import { WEBSITE } from "@/lib/color";
+import type { Brand } from "../brand/kits";
 import { absolutePath, getAsset } from "../storage/assets";
 import { AppError, sha256 } from "../util";
 import { renderer, type FontNeed } from "./browser";
@@ -18,7 +19,7 @@ export function frameFor(platform: PlatformKey): Frame {
   return { width: p.width, height: p.height, safe: p.safe };
 }
 
-export function brandColors(brand: MasterBrand): BrandColors {
+export function brandColors(brand: Brand): BrandColors {
   const c = brand.tokens.colors;
   return {
     primary: c.primary!,
@@ -34,22 +35,37 @@ export function brandColors(brand: MasterBrand): BrandColors {
 }
 
 /** Colour rule (plan §3): every colour used by the brand layer must be a token. */
-export function assertTokenColors(colors: BrandColors, brand: MasterBrand): void {
+export function assertTokenColors(colors: BrandColors, brand: Brand): void {
   const allowed = new Set(Object.values(brand.tokens.colors).map((v) => v.toUpperCase()));
   for (const [k, v] of Object.entries(colors)) {
-    if (!allowed.has(v.toUpperCase())) throw new AppError("BRAND_COLOR", `Colour ${k}=${v} is not a DemandMesh brand token`, 422);
+    if (!allowed.has(v.toUpperCase())) throw new AppError("BRAND_COLOR", `Colour ${k}=${v} is not one of the brand\'s colours`, 422);
   }
 }
 
-/** Official logo with pinned-hash verification — the renderer refuses anything else (plan §3). */
-export function officialLogo(brand: MasterBrand) {
+/**
+ * Official logo with pinned-hash verification — the renderer refuses anything else (plan §3).
+ * Null when the brand has no logo: outros then set the brand name as a text wordmark.
+ */
+export function officialLogo(brand: Brand) {
   const logo = brand.logos.find((l) => l.variant === "horizontal");
-  if (!logo) throw new AppError("LOGO_MISSING", "No official horizontal logo", 500);
+  if (!logo) return null;
   const asset = getAsset(logo.assetId);
   if (!asset || asset.sha256 !== logo.pinnedSha256 || !asset.official) throw new AppError("LOGO_NOT_OFFICIAL", "Logo file does not match the pinned official logo", 500);
-  const spec = brand.tokens.logo.horizontal;
+  const spec = brand.tokens.logo?.horizontal;
   return { asset, src: pathToFileURL(absolutePath(asset)).href, width: asset.width!, height: asset.height!, maxScale: spec?.maxScale ?? 1.25 };
 }
+
+/** The outro shows the brand's website exactly as saved in its revision. */
+export function outroWebsite(brand: Brand): string {
+  const website = brand.tokens.website;
+  if (!WEBSITE.test(website)) throw new AppError("OUTRO_WEBSITE", `The brand website "${website}" isn't a valid address — fix it on the Brands page.`, 422);
+  return website;
+}
+
+type LogoProp = { src: string; width: number; height: number; maxScale: number } | null;
+const logoProp = (logo: ReturnType<typeof officialLogo>): LogoProp => (logo ? { src: logo.src, width: logo.width, height: logo.height, maxScale: logo.maxScale } : null);
+/** Font needs for the wordmark (only when there's no logo file). */
+const wordmarkFonts = (brand: Brand, logo: ReturnType<typeof officialLogo>): FontNeed[] => (logo ? [] : [{ lang: wordmarkLang(brand.tokens.name), weight: 800, text: brand.tokens.name }]);
 
 export interface RenderedPng {
   file: string;
@@ -58,7 +74,7 @@ export interface RenderedPng {
 }
 
 export async function renderOverlay(args: {
-  brand: MasterBrand;
+  brand: Brand;
   platform: PlatformKey;
   lang: Lang;
   layout: LayoutVariant;
@@ -76,14 +92,13 @@ export async function renderOverlay(args: {
   return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, f: frame, l: args.layout, lang: args.lang, lines })) };
 }
 
-export async function renderStandardOutro(args: { brand: MasterBrand; platform: PlatformKey; lang: Lang; cta: string; outFile: string }): Promise<RenderedPng> {
+export async function renderStandardOutro(args: { brand: Brand; platform: PlatformKey; lang: Lang; cta: string; outFile: string }): Promise<RenderedPng> {
   const frame = frameFor(args.platform);
   const colors = brandColors(args.brand);
   const logo = officialLogo(args.brand);
-  const website = args.brand.tokens.website;
-  if (website !== "demandmesh.shop") throw new AppError("OUTRO_WEBSITE", "Outro website must be exactly demandmesh.shop", 500);
+  const website = outroWebsite(args.brand);
   const bodyHtml = renderToStaticMarkup(
-    createElement(StandardOutro, { frame, colors, lang: args.lang, logo: { src: logo.src, width: logo.width, height: logo.height, maxScale: logo.maxScale }, tagline: args.brand.tokens.tagline, cta: args.cta, website }),
+    createElement(StandardOutro, { frame, colors, lang: args.lang, logo: logoProp(logo), brandName: args.brand.tokens.name, tagline: args.brand.tokens.tagline, cta: args.cta, website }),
   );
   await renderer.render({
     width: frame.width,
@@ -91,23 +106,24 @@ export async function renderStandardOutro(args: { brand: MasterBrand; platform: 
     css: "",
     bodyHtml,
     fonts: [
-      { lang: "en", weight: 500, text: args.brand.tokens.tagline },
+      ...(args.brand.tokens.tagline ? [{ lang: "en" as const, weight: 500, text: args.brand.tokens.tagline }] : []),
+      ...wordmarkFonts(args.brand, logo),
       { lang: args.lang, weight: 700, text: args.cta },
       { lang: "en", weight: 700, text: website },
     ],
     outFile: args.outFile,
   });
-  return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, frame, cta: args.cta, logo: logo.asset.sha256, website, tag: args.brand.tokens.tagline })) };
+  return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, frame, cta: args.cta, logo: logo?.asset.sha256 ?? args.brand.tokens.name, website, tag: args.brand.tokens.tagline, colors })) };
 }
 
 export type OutroType = "standard" | "promotional" | "product" | "minimal";
 
 /**
- * Renders any DemandMesh outro preset (plan §6). Offer/price text comes only from brief-derived
+ * Renders any outro preset (plan §6). Offer/price text comes only from brief-derived
  * lines; the product image is the original upload; the logo is the pinned official file.
  */
 export async function renderOutro(args: {
-  brand: MasterBrand;
+  brand: Brand;
   platform: PlatformKey;
   lang: Lang;
   type: OutroType;
@@ -120,10 +136,9 @@ export async function renderOutro(args: {
   const frame = frameFor(args.platform);
   const colors = brandColors(args.brand);
   const logo = officialLogo(args.brand);
-  const website = args.brand.tokens.website;
-  if (website !== "demandmesh.shop") throw new AppError("OUTRO_WEBSITE", "Outro website must be exactly demandmesh.shop", 500);
-  const common = { frame, colors, lang: args.lang, logo: { src: logo.src, width: logo.width, height: logo.height, maxScale: logo.maxScale }, tagline: args.brand.tokens.tagline, cta: args.cta, website };
-  const fonts: FontNeed[] = [{ lang: "en", weight: 700, text: website }];
+  const website = outroWebsite(args.brand);
+  const common = { frame, colors, lang: args.lang, logo: logoProp(logo), brandName: args.brand.tokens.name, tagline: args.brand.tokens.tagline, cta: args.cta, website };
+  const fonts: FontNeed[] = [{ lang: "en", weight: 700, text: website }, ...wordmarkFonts(args.brand, logo)];
   let element;
   if (args.type === "promotional") {
     if (!args.offerLines.some((l) => l.kind === "offer_price" || l.kind === "group_price")) throw new AppError("OUTRO_NEEDS_OFFER", "The promotional outro needs a price or group-buy offer in the brief.", 422);
@@ -138,13 +153,13 @@ export async function renderOutro(args: {
     element = createElement(MinimalOutro, common);
   }
   await renderer.render({ width: frame.width, height: frame.height, css: "", bodyHtml: renderToStaticMarkup(element), fonts, outFile: args.outFile });
-  return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, type: args.type, frame, cta: args.cta, offer: args.offerLines, product: args.product, logo: logo.asset.sha256 })) };
+  return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, type: args.type, frame, cta: args.cta, offer: args.offerLines, product: args.product, logo: logo?.asset.sha256 ?? args.brand.tokens.name, colors })) };
 }
 
 export const PRODUCT_CANVAS_SCALE = 1.12;
 
 /** Original product photo on the brand backdrop, rendered larger than the frame for camera motion. */
-export async function renderProductCanvas(args: { brand: MasterBrand; platform: PlatformKey; productAssetId: string; outFile: string; canvasScale?: number }): Promise<RenderedPng & { width: number; height: number }> {
+export async function renderProductCanvas(args: { brand: Brand; platform: PlatformKey; productAssetId: string; outFile: string; canvasScale?: number }): Promise<RenderedPng & { width: number; height: number }> {
   const frame = frameFor(args.platform);
   const colors = brandColors(args.brand);
   const asset = getAsset(args.productAssetId);

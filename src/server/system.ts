@@ -2,7 +2,7 @@ import "./guard";
 import { db, quickCheck } from "./db";
 import { freeBytes } from "./storage/disk";
 import { getWorker, workerOnline } from "./jobs/worker-lease";
-import { getMasterBrand } from "./brand/master";
+import { getDefaultBrand, listBrands } from "./brand/kits";
 import { PINNED_CHROME_BUILD } from "./render/browser";
 import { now } from "./util";
 
@@ -11,13 +11,13 @@ export interface SystemStatus {
   renderer: { pinnedBuild: string; usingPinned: boolean | null };
   disk: { freeBytes: number; storageBytes: number };
   db: { ok: boolean };
-  brand: { seeded: boolean; name: string | null; logoTemporary: boolean | null; fontsTemporary: boolean | null };
+  brand: { seeded: boolean; name: string | null; count: number; logoTemporary: boolean | null; fontsTemporary: boolean | null };
 }
 
 /** Read-only snapshot for GET /api/system/status (no side effects). */
 export async function systemStatus(): Promise<SystemStatus> {
   const w = getWorker();
-  const brand = getMasterBrand();
+  const brand = getDefaultBrand();
   const storage = db().prepare("SELECT COALESCE(SUM(bytes),0) AS b FROM assets").get() as { b: number };
   const rv = w?.renderer_version ?? null;
   return {
@@ -35,6 +35,7 @@ export async function systemStatus(): Promise<SystemStatus> {
     brand: {
       seeded: !!brand,
       name: brand?.name ?? null,
+      count: listBrands().length,
       logoTemporary: brand ? brand.logos.some((l) => l.temporary) : null,
       fontsTemporary: brand ? (brand.tokens.typography as { fontsTemporary?: boolean }).fontsTemporary ?? null : null,
     },

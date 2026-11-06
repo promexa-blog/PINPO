@@ -4,7 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { paths } from "@/server/paths";
 import { renderer } from "@/server/render/browser";
-import { seedMasterBrand, type MasterBrand } from "@/server/brand/master";
+import { seedBundledBrand, type Brand } from "@/server/brand/kits";
 import { renderOverlay, renderProductCanvas, renderStandardOutro, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
 import { normalizeClip, productClip, outroClip, extractFrame, PUSH_IN_ZOOM } from "@/server/media/clips";
 import { buildComposeGraph } from "@/server/media/filtergraph";
@@ -22,12 +22,12 @@ const W = 1080;
 const H = 1920;
 const dir = path.join(paths.work, "media-test");
 const p = (n: string) => path.join(dir, n);
-let brand: MasterBrand;
+let brand: Brand;
 let productId: string;
 
 beforeAll(async () => {
   mkdirSync(dir, { recursive: true });
-  brand = await seedMasterBrand();
+  brand = (await seedBundledBrand())!;
   // A recognisable "product" photo: coloured bands + a dark label block.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><rect width="900" height="1200" fill="#d35400"/><rect y="400" width="900" height="400" fill="#2e86c1"/><rect x="250" y="520" width="400" height="160" fill="#1b2631"/></svg>`;
   const png = await sharp(Buffer.from(svg)).png().toBuffer();

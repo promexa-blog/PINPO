@@ -2,7 +2,7 @@ import "../guard";
 import type { SceneEdit } from "@/lib/version";
 import { PLATFORMS } from "@/lib/platforms";
 import { getModel, requestDuration } from "../models/registry";
-import { getMasterBrand, readBundledTokens } from "../brand/master";
+import { brandForVersion, type Brand } from "../brand/kits";
 import { getTemplate } from "./templates";
 import { buildStoryboard, OUTRO_S, OUTRO_TRANSITION_S, type ClaimRecord, type Storyboard } from "./storyboard";
 import { computeTimeline, type Timeline } from "./timeline";
@@ -44,13 +44,13 @@ export function storyboardFor(v: VersionRow): Storyboard {
     lengthS: settings.lengthS,
     pacing: v.pacing,
     model: getModel(settings.modelId),
-    brandLines: brandLines(),
+    brandLines: brandLines(brandForVersion(v.id)),
   });
 }
 
-export function brandLines(): { tagline: string; groupBuyLine: string } {
-  const t = getMasterBrand()?.tokens;
-  return { tagline: t?.tagline ?? "Where demands connects.", groupBuyLine: t?.groupBuyLine ?? readBundledTokens().groupBuyLine ?? "" };
+/** Brand copy lines a template can place on screen (empty when the brand hasn't set them). */
+export function brandLines(brand: Brand): { tagline: string; groupBuyLine: string } {
+  return { tagline: brand.tokens.tagline ?? "", groupBuyLine: brand.tokens.groupBuyLine ?? "" };
 }
 
 /** Hash of the generated content of a scene, to detect user edits (plan test S3). */
@@ -175,7 +175,7 @@ export function checkDraft(versionId: string): DraftCheck {
       if (!vo.talentConsent) add("warn", "voiceover", `Voiceover on scene ${vo.scenePosition + 1}: no voice-artist consent recorded — export will be blocked.`);
     }
   }
-  const brand = getMasterBrand();
+  const brand = brandForVersion(versionId);
   const outroText = brief.cta[finishing.outroLang] ?? "";
   if (finishing.outroType === "promotional" && !brief.offers.priceInr && !brief.offers.groupBuy) add("fail", "outro", "The Promotional outro needs a price or group-buy offer — add one in Price & offer, or pick another outro.");
   if (finishing.outroType === "product" && !brief.product.imageAssetIds.length) add("fail", "outro", "The Product outro needs a product photo.");
@@ -185,8 +185,8 @@ export function checkDraft(versionId: string): DraftCheck {
     scenes,
     outroCta: { lang: finishing.outroLang, text: outroText },
     today: indiaToday(),
-    approvedCtas: brand?.tokens.approvedCtas ?? {},
-    brandLines: brandLines(),
+    approvedCtas: brand.tokens.approvedCtas,
+    brandLines: brandLines(brand),
   });
   for (const it of items) if (it.status === "fail") blocking.push(it);
   else if (it.status !== "pass") warnings.push(it);

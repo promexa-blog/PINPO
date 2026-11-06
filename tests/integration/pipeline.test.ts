@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import sharp from "sharp";
 import { db } from "@/server/db";
-import { seedMasterBrand } from "@/server/brand/master";
+import { seedBundledBrand } from "@/server/brand/kits";
 import { seedTemplates } from "@/server/planning/templates";
 import { createAd, getBrief, patchDraft, requireVersion } from "@/server/db/repos/versions";
 import { applyStoryboard, checkDraft } from "@/server/planning/draft";
@@ -90,7 +90,7 @@ async function makeAd(name: string, promptMarker = "", opts: { templateKey?: str
 }
 
 beforeAll(async () => {
-  await seedMasterBrand();
+  await seedBundledBrand();
   seedTemplates();
 });
 afterAll(async () => {

@@ -2,7 +2,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { db, tx } from "@/server/db";
 import { paths } from "@/server/paths";
-import { getMasterBrand } from "@/server/brand/master";
+import { brandForVersion } from "@/server/brand/kits";
 import { renderProductCanvas, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
 import { productClip } from "@/server/media/clips";
 import { validateClip } from "@/server/media/validate";
@@ -53,7 +53,7 @@ export const sceneGenerateHandler: JobHandler = {
 // ---------------- original-product scenes (no AI, plan §7) ----------------
 
 async function runLocal(ctx: JobContext, input: SceneJobInput): Promise<void> {
-  const brand = getMasterBrand()!;
+  const brand = brandForVersion(ctx.job.version_id!);
   const dir = path.join(paths.work, `${ctx.job.id}-a${ctx.job.attempt}`);
   await mkdir(dir, { recursive: true });
   try {
@@ -115,7 +115,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
             if (!referenceImageUrls.length) throw new AppError("NO_REFERENCES", "No product reference images could be uploaded", 422);
           }
           if (input.mode === "i2v") {
-            const brand = getMasterBrand()!;
+            const brand = brandForVersion(job.version_id!);
             const dir = path.join(paths.work, `${job.id}-start`);
             await mkdir(dir, { recursive: true });
             // Start frame = the original photo composited unaltered at the exact target aspect.
@@ -227,7 +227,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
               origin: `${endpoint} request ${job.fal_request_id}`,
               license: `fal catalog license_type: ${model.license.type} (verified ${model.license.verifiedAt})`,
               commercialUse: model.license.type === "commercial" ? "yes" : "unknown",
-              rightsHolder: "Generated for DemandMesh via fal.ai",
+              rightsHolder: `Generated for ${brandForVersion(job.version_id!).tokens.name} via fal.ai`,
             },
           });
           addCost({

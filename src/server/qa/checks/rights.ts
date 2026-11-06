@@ -48,5 +48,5 @@ export function creditsText(used: UsedAsset[], adName: string): string {
     const parts = [a.attribution_text?.trim() || a.original_name || ROLE[role], a.rights_holder ? `© ${a.rights_holder}` : null, a.license ? `Licence: ${a.license}` : null, a.origin ? `Source: ${a.origin}` : null].filter(Boolean);
     lines.push(`- ${ROLE[role]}: ${parts.join(" · ")}`);
   }
-  return [`Credits — ${adName}`, `Made with PINPO for DemandMesh (demandmesh.shop).`, "", ...(lines.length ? lines : ["No third-party credits required."]), ""].join("\n");
+  return [`Credits — ${adName}`, `Made with PINPO.`, "", ...(lines.length ? lines : ["No third-party credits required."]), ""].join("\n");
 }

@@ -6,7 +6,7 @@ import { costSummary } from "./jobs/costs";
 import { getItems, exportGate, hasFinalAttestation, FINAL_ATTESTATION } from "./qa/reports";
 import { getAsset } from "./storage/assets";
 import { sha256 } from "./util";
-import { getMasterBrand } from "./brand/master";
+import { brandForVersion } from "./brand/kits";
 
 /** Read model for GET /api/versions/[vid] — side-effect free, ETag-able (plan §4, §13). */
 export function versionView(versionId: string) {
@@ -27,6 +27,7 @@ export function versionView(versionId: string) {
     .prepare(`SELECT e.id, e.at, e.job_id, e.to_status, e.stage, e.message FROM job_events e JOIN jobs j ON j.id = e.job_id WHERE j.version_id = ? ORDER BY e.id DESC LIMIT 40`)
     .all(versionId);
   const brief = getBrief(versionId);
+  const brand = brandForVersion(versionId);
   const view = {
     ad,
     versions,
@@ -51,7 +52,8 @@ export function versionView(versionId: string) {
     productImages: brief.product.imageAssetIds.map((id) => product(id)).filter(Boolean),
     scenes: scenes.map((s, i) => ({ ...s, id: rows[i]!.id, status: rows[i]!.status, clipAssetId: rows[i]!.clip_asset_id, job: latestJobFor(rows[i]!.id) })),
     voiceovers: getVoiceovers(versionId),
-    brandColors: getMasterBrand()?.tokens.colors ?? {},
+    brand: { id: brand.id, name: brand.tokens.name, website: brand.tokens.website, revisionNumber: brand.revisionNumber, hasLogo: brand.logos.length > 0, approvedCtas: brand.tokens.approvedCtas },
+    brandColors: brand.tokens.colors,
     composeJob: [...jobs].reverse().find((j) => j.type === "compose") ?? null,
     check: v.status === "draft" ? checkDraft(versionId) : null,
     costs: costSummary(versionId),

@@ -4,7 +4,8 @@ import path from "node:path";
 import sharp from "sharp";
 import { paths } from "@/server/paths";
 import { renderer } from "@/server/render/browser";
-import { seedMasterBrand, type MasterBrand } from "@/server/brand/master";
+import { seedBundledBrand, createBrand, type Brand } from "@/server/brand/kits";
+import { BrandCreate } from "@/lib/brand";
 import { renderOutro, renderOverlay, type OutroType } from "@/server/render/brand-render";
 import { storeUpload } from "@/server/storage/upload";
 import { UploadMeta } from "@/lib/schemas";
@@ -18,7 +19,7 @@ import type { PlatformKey } from "@/lib/platforms";
 
 const REFS = path.resolve("tests/fixtures/render-refs");
 const out = path.join(paths.work, "snapshots");
-let brand: MasterBrand;
+let brand: Brand;
 let productId: string;
 
 async function compare(name: string, file: string) {
@@ -42,7 +43,7 @@ async function compare(name: string, file: string) {
 
 beforeAll(async () => {
   mkdirSync(out, { recursive: true });
-  brand = await seedMasterBrand();
+  brand = (await seedBundledBrand())!;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect x="150" y="100" width="500" height="800" rx="50" fill="#b8c1c8"/><rect x="150" y="380" width="500" height="14" fill="#7f8c95"/><rect x="320" y="30" width="160" height="90" rx="16" fill="#1b2631"/></svg>`;
   const png = await sharp({ create: { width: 800, height: 1000, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite([{ input: Buffer.from(svg) }]).png().toBuffer();
   productId = (await storeUpload(png, "p.png", UploadMeta.parse({ purpose: "product_image", provenance: { sourceType: "own_photo", commercialUse: "yes", permissionConfirmed: true } }))).id;
@@ -96,4 +97,18 @@ describe("DemandMesh outro presets (O1)", () => {
   it("promotional outro refuses to render without an offer", async () => {
     await expect(renderOutro({ brand, platform: "instagram_reels", lang: "en", type: "promotional", cta: "Shop now", offerLines: [], outFile: path.join(out, "x.png") })).rejects.toMatchObject({ code: "OUTRO_NEEDS_OFFER" });
   });
+
+  it("renders a brand without a logo as a wordmark in its own colours (any brand)", async () => {
+    const k = createBrand(BrandCreate.parse({ name: "Kappa Coffee", website: "kappa.coffee", primary: "#3B1F0E", secondary: "#8A5A2B", tagline: "Slow roasted." }));
+    for (const type of ["standard", "minimal"] as const) {
+      const file = path.join(out, `wordmark-${type}.png`);
+      await renderOutro({ brand: k, platform: "instagram_reels", lang: "en", type, cta: "Order on kappa.coffee", offerLines: [], outFile: file });
+      const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+      expect([info.width, info.height]).toEqual([1080, 1920]);
+      // The wordmark is set in the brand primary (#3B1F0E): some pixels must be (close to) it.
+      let brandInk = 0;
+      for (let i = 0; i < data.length; i += info.channels) if (Math.abs(data[i]! - 0x3b) < 6 && Math.abs(data[i + 1]! - 0x1f) < 6 && Math.abs(data[i + 2]! - 0x0e) < 6) brandInk++;
+      expect(brandInk).toBeGreaterThan(2000);
+    }
+  }, 60_000);
 });

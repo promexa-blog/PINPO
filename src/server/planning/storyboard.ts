@@ -73,7 +73,7 @@ export interface StoryboardInput {
   pacing: Pacing;
   model: ModelSpec;
   outroS?: number;
-  /** Brand copy from the master brand tokens (tagline, group-buy line). */
+  /** Brand copy from the ad's brand revision (tagline, group-buy line). */
   brandLines?: { tagline: string; groupBuyLine: string };
 }
 
@@ -97,7 +97,7 @@ export interface Storyboard {
 export const OUTRO_S = 3;
 export const OUTRO_TRANSITION_S = 0.5;
 export const NO_TEXT_SUFFIX = "No on-screen text, captions, letters, logos, watermarks or brand names.";
-const DEFAULT_CTA: Record<Lang, string | null> = { en: "Shop now on demandmesh.shop", ml: null, hi: null };
+const DEFAULT_CTA: Record<Lang, string | null> = { en: "Shop now", ml: null, hi: null };
 
 export function buildStoryboard(input: StoryboardInput): Storyboard {
   const { template, brief, platform, lengthS, pacing, model } = input;
@@ -186,8 +186,8 @@ function overlayLines(
     return out;
   };
   if (source === "product_name") return [{ kind: "product_name", text: brief.product.name }];
-  if (source === "tagline") return ctx.brandLines ? [{ kind: "tagline", text: ctx.brandLines.tagline }] : [];
-  if (source === "brand_line") return ctx.brandLines ? [{ kind: "brand_line", text: ctx.brandLines.groupBuyLine }] : [];
+  if (source === "tagline") return ctx.brandLines?.tagline ? [{ kind: "tagline", text: ctx.brandLines.tagline }] : [];
+  if (source === "brand_line") return ctx.brandLines?.groupBuyLine ? [{ kind: "brand_line", text: ctx.brandLines.groupBuyLine }] : [];
   if (source === "group_buy") {
     const g = groupBuyLines(brief);
     return g.length ? [...g, cta()] : [{ kind: "placeholder", text: "[Add the group price, minimum buyers and deadline in Price & offer]" }];

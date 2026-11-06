@@ -1,11 +1,11 @@
-import { getMasterBrand, brandRevisions } from "@/server/brand/master";
+import { getDefaultBrand, brandRevisions } from "@/server/brand/kits";
 import { StudioHeader } from "../_components/header";
 import { BrandEditor } from "../_components/brand-editor";
 
 export const dynamic = "force-dynamic";
 
 export default function BrandPage() {
-  const brand = getMasterBrand();
+  const brand = getDefaultBrand();
   if (!brand) return <p className="p-8">The brand is set up when the worker first starts (npm run dev).</p>;
   const t = brand.tokens;
   const logo = brand.logos.find((l) => l.variant === "horizontal");
@@ -39,11 +39,11 @@ export default function BrandPage() {
             .filter(([k]) => !["white", "black"].includes(k))
             .map(([k, v]) => (
               <li key={k} className="overflow-hidden rounded-lg border border-dm-border">
-                <div className="h-14" style={{ background: v }} />
+                <div className="h-14" style={{ background: String(v) }} />
                 <p className="px-3 py-2 text-xs">
                   <span className="font-semibold">{k.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
                   <br />
-                  <span className="text-dm-secondary">{v}</span>
+                  <span className="text-dm-secondary">{String(v)}</span>
                 </p>
               </li>
             ))}
@@ -80,7 +80,7 @@ export default function BrandPage() {
             <dd className="inline">{t.social.instagram}</dd>
           </div>
         </dl>
-        <BrandEditor tagline={t.tagline} groupBuyLine={t.groupBuyLine ?? ""} approvedCtas={{ en: t.approvedCtas.en ?? [], ml: t.approvedCtas.ml ?? [], hi: t.approvedCtas.hi ?? [] }} instagram={t.social.instagram ?? ""} />
+        <BrandEditor brandId={brand.id} tagline={t.tagline} groupBuyLine={t.groupBuyLine ?? ""} approvedCtas={{ en: t.approvedCtas.en ?? [], ml: t.approvedCtas.ml ?? [], hi: t.approvedCtas.hi ?? [] }} instagram={t.social.instagram ?? ""} />
       </section>
 
       <section aria-labelledby="rev-h" className="mt-8">

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Field, Input, Textarea, api } from "./ui";
 
 interface Props {
+  brandId: string;
   tagline: string;
   groupBuyLine: string;
   approvedCtas: { en: string[]; ml: string[]; hi: string[] };
@@ -30,8 +31,8 @@ export function BrandEditor(props: Props) {
           variant="secondary"
           className="justify-self-start"
           onClick={async () => {
-            if (!window.confirm("Unlock DemandMesh brand copy for 10 minutes? Saving creates a new brand revision; existing ads keep theirs.")) return;
-            await api("/api/brand/unlock", { method: "POST" });
+            if (!window.confirm("Unlock brand settings for 10 minutes? Saving creates a new brand revision; existing ads keep theirs.")) return;
+            await api(`/api/brands/${props.brandId}/unlock`, { method: "POST" });
             setUnlocked(true);
           }}
         >
@@ -48,7 +49,7 @@ export function BrandEditor(props: Props) {
         e.preventDefault();
         setMsg(null);
         try {
-          await api("/api/brand", { method: "PATCH", body: JSON.stringify({ tagline, groupBuyLine, approvedCtas: { en: lines(ctas.en), ml: lines(ctas.ml), hi: lines(ctas.hi) }, social: { instagram }, note: note || undefined }) });
+          await api(`/api/brands/${props.brandId}`, { method: "PATCH", body: JSON.stringify({ tagline, groupBuyLine, approvedCtas: { en: lines(ctas.en), ml: lines(ctas.ml), hi: lines(ctas.hi) }, social: { instagram }, note: note || undefined }) });
           setUnlocked(false);
           setMsg("Saved as a new brand revision. Brand settings are locked again.");
           router.refresh();

@@ -43,7 +43,7 @@ export interface VoiceoverSpec {
 const XFADE: Record<Exclude<XfadeKind, "cut">, string> = {
   crossfade: "fade",
   dip_white: "fadewhite",
-  // xfade has no custom-colour dip; fadeblack is the closest to DemandMesh primary (#0C1C28).
+  // xfade has no custom-colour dip; fadeblack is the closest to a dark brand primary.
   dip_primary: "fadeblack",
   slide: "slideleft",
 };

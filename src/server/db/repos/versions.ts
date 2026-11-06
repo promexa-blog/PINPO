@@ -4,7 +4,7 @@ import { db, tx } from "..";
 import { BriefInput, type ClaimInput } from "@/lib/brief";
 import { Finishing, VersionSettings, type SceneEdit, type VersionPatch, type VoiceoverSegment } from "@/lib/version";
 import type { PlatformKey } from "@/lib/platforms";
-import { getMasterBrand } from "../../brand/master";
+import { getBrand, getDefaultBrand, type Brand } from "../../brand/kits";
 import { classify, primaryCategory } from "../../brief/claims";
 import { getTemplate } from "../../planning/templates";
 import { defaultPacing, type Pacing } from "../../planning/creative";
@@ -72,27 +72,27 @@ export interface ClaimRow {
 
 export const DEFAULT_FINISHING: Finishing = { outroType: "standard", outroLang: "en", audioMode: "music_only", musicAssetId: null, musicVolumeDb: -8, duckClipUnderVoice: true };
 
-export function defaultBrief(platform: PlatformKey): BriefInput {
+export function defaultBrief(platform: PlatformKey, brand?: Brand): BriefInput {
   return BriefInput.parse({
     product: { name: "", category: "home_kitchen", appearance: "", imageAssetIds: [] },
     audience: { who: "" },
     campaign: { objective: "sales", platform },
     claims: [],
     offers: { stockConfirmed: false },
-    cta: { en: "Shop now on demandmesh.shop" },
+    cta: { en: brand?.tokens.approvedCtas.en?.[0] ?? (brand ? `Shop now on ${brand.tokens.website}` : "Shop now") },
     creative: { direction: "", tone: "friendly", style: "lifestyle" },
     languages: ["en"],
   });
 }
 
-/** Creates an ad with draft v1 on the protected master brand (plan §3, §4). */
-export function createAd(input: { name: string; templateKey: string; platform: PlatformKey }): { adId: string; versionId: string } {
-  const brand = getMasterBrand();
-  if (!brand) throw new AppError("BRAND_NOT_READY", "The DemandMesh brand isn't set up yet. Start the worker once (npm run dev).", 409);
+/** Creates an ad with draft v1 on the chosen brand (default brand when none is given) (plan §3, §4). */
+export function createAd(input: { name: string; templateKey: string; platform: PlatformKey; brandId?: string }): { adId: string; versionId: string } {
+  const brand = input.brandId ? getBrand(input.brandId) : getDefaultBrand();
+  if (!brand) throw new AppError(input.brandId ? "BRAND_NOT_FOUND" : "BRAND_NOT_READY", input.brandId ? "That brand doesn't exist." : "No brand yet. Create one on the Brands page first.", input.brandId ? 404 : 409);
   const template = getTemplate(input.templateKey);
   if (!template) throw new AppError("TEMPLATE_NOT_FOUND", "Template not found", 404);
   if (!template.platforms.includes(input.platform)) throw new AppError("TEMPLATE_PLATFORM", `${template.name} isn't available for this platform.`, 422);
-  const brief = defaultBrief(input.platform);
+  const brief = defaultBrief(input.platform, brand);
   const settings: VersionSettings = { templateKey: template.key, modelId: "wan-3.0", resolution: "720p", lengthS: 15, clipAudio: false, seed: randomInt(0, 2_147_483_647) };
   return tx(() => {
     const t = now();

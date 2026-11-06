@@ -16,7 +16,7 @@ export const GET = route(async (req: Request) => {
   return Response.json({ ads: ads.map((a) => ({ ...a, lengthS: (JSON.parse(a.settings_json) as { lengthS: number }).lengthS, settings_json: undefined })) });
 });
 
-const CreateAd = z.object({ name: z.string().trim().min(1).max(120), templateKey: z.string().regex(/^[a-z_]+$/), platform: PlatformKeySchema });
+const CreateAd = z.object({ name: z.string().trim().min(1).max(120), templateKey: z.string().regex(/^[a-z0-9_]+$/), platform: PlatformKeySchema, brandId: z.string().min(1).max(64).optional() });
 
 export const POST = route(async (req: Request) => {
   seedTemplates();

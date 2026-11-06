@@ -1,6 +1,6 @@
 import "../../guard";
 import { db, tx } from "..";
-import { getMasterBrand } from "../../brand/master";
+import { getBrand } from "../../brand/kits";
 import { newId, now, AppError } from "../../util";
 import { requireVersion, type VersionRow } from "./versions";
 
@@ -10,7 +10,9 @@ import { requireVersion, type VersionRow } from "./versions";
 function copyInto(from: VersionRow, adId: string, number: number, parent: string | null): string {
   const t = now();
   const id = newId("ver");
-  const brand = getMasterBrand();
+  // New drafts pick up the brand's latest revision (old versions keep theirs).
+  const kitId = (db().prepare("SELECT brand_kit_id FROM ads WHERE id = ?").get(adId) as { brand_kit_id: string } | undefined)?.brand_kit_id;
+  const brand = kitId ? getBrand(kitId) : undefined;
   db()
     .prepare(
       `INSERT INTO ad_versions (id, ad_id, number, status, settings_json, finishing_json, platform, pacing, brand_revision_id, template_id, parent_version_id, created_at, updated_at)

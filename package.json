@@ -22,6 +22,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@tailwindcss/postcss": "4.3.4",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.6.6",
@@ -47,6 +48,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "models:check": "tsx scripts/models-check.ts"
+    "models:check": "tsx scripts/models-check.ts",
+    "test:e2e": "next build && playwright test"
   }
 }

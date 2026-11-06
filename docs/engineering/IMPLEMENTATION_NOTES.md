@@ -96,3 +96,14 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - **WYSIWYG frame previews** in the storyboard (plan §13). They use the same `OverlayLayer` component the renderer uses, at full frame size and scaled down, over the original product photo or an "AI footage" placeholder, with the platform safe area dashed. The brand fonts are served to the browser from the bundled files through an allow-listed `/api/fonts/[file]` route.
 - **16:9 typography:** landscape frames scale type 1.4× (portrait and square are unchanged), so 16:9 text and outros no longer read small. The 16:9 outro snapshot was re-approved after visual review.
 - **Small fixes:** the new-ad form defaults to *Product showcase*; library thumbnails are capped in height on phones; the header wraps at 375px; every page was checked for horizontal scroll at 375px (none).
+
+## Phase 10 — hardening and release
+- **Production build** (`next build`) succeeds. Turbopack warns that dynamic filesystem paths trace the whole project into the server output. This is harmless because no standalone output is used, and runtime data now lives outside the project.
+- **End-to-end tests** (Playwright 1.65 driving the pinned chrome-headless-shell, against `next start` plus a mock-mode worker with an isolated data home):
+  - E1 at desktop and 375 px: brief → storyboard → generate → review → attest → export, with filename, `video/mp4` content type, credits, and no horizontal scroll
+  - E2: autosave across a reload, and the conflict shown in a second tab
+  - E3: new version with a finishing-only change; both versions playable; scenes reused
+  All 4 pass.
+- **Test hardening:** the final player has its own accessible label ("Final ad, version N"), so tests and screen readers can tell it apart from scene clips.
+- **Final state:** 94 unit/integration tests and 4 e2e tests pass; typecheck and lint are clean.
+- **Not done:** Phase 4, a real-fal ad with user quality approval, needs `FAL_KEY` and a real product.

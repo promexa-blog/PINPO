@@ -156,7 +156,7 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
           actions={running ? <Button variant="danger" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/cancel`, { method: "POST" }))}>Cancel</Button> : null}
         >
           {v.status === "ready" && v.finalAssetId ? (
-            <video controls preload="metadata" poster={v.thumbAssetId ? `/api/assets/${v.thumbAssetId}` : undefined} src={`/api/assets/${v.finalAssetId}`} className={`mx-auto max-h-[70dvh] rounded-lg bg-dm-surface ${p.aspect === "9:16" ? "aspect-[9/16]" : p.aspect === "1:1" ? "aspect-square" : "aspect-video w-full"}`} />
+            <video aria-label={`Final ad, version ${v.number}`} controls preload="metadata" poster={v.thumbAssetId ? `/api/assets/${v.thumbAssetId}` : undefined} src={`/api/assets/${v.finalAssetId}`} className={`mx-auto max-h-[70dvh] rounded-lg bg-dm-surface ${p.aspect === "9:16" ? "aspect-[9/16]" : p.aspect === "1:1" ? "aspect-square" : "aspect-video w-full"}`} />
           ) : (
             <div className="grid gap-3" aria-live="polite">
               <p className="text-sm font-semibold">

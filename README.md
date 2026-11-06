@@ -30,8 +30,10 @@ npm run dev       # starts the studio (http://127.0.0.1:3000) and the background
 |---|---|
 | Next.js (UI + API) | Validates input, stores drafts, queues jobs. Never calls fal and never runs ffmpeg. |
 | Worker (`src/worker`) | Generates clips with fal.ai, composes video with ffmpeg, renders brand graphics in headless Chrome, runs QA. One worker runs at a time, with leases and crash recovery. |
-| SQLite (`data/studio.db`) | Holds all state: ads, versions, jobs, costs, QA. WAL mode, with daily backups in `data/backups/`. |
-| `storage/` | Content-addressed media files with rights/licence information. |
+| SQLite (`~/.pinpo/data/studio.db`) | Holds all state: ads, versions, jobs, costs, QA. WAL mode, with daily backups in `~/.pinpo/data/backups/`. |
+| `~/.pinpo/storage/` | Content-addressed media files with rights/licence information. |
+
+All studio data lives in **`~/.pinpo`**, outside the project folder. Set `PINPO_HOME` to move it. Keeping it outside the project stops Next's dev bundler from reloading pages whenever the database changes. `npm run setup` moves data from the old in-project `data/` and `storage/` folders automatically.
 
 ## Scripts
 | Command | What it does |

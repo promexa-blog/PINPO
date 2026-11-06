@@ -20,3 +20,8 @@ body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Brand-layer fonts for the WYSIWYG editor preview (same faces the renderer uses). */
+@font-face { font-family: "PINPO Sans"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "PINPO Malayalam"; src: url("/api/fonts/NotoSansMalayalam.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "PINPO Devanagari"; src: url("/api/fonts/NotoSansDevanagari.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }

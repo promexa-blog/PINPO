@@ -88,3 +88,11 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - **Storage:** a daily GC job and a "Free up space" button. GC purges ads deleted more than 7 days ago, removes unreferenced assets after 24 hours (official and seed assets are never removed), and caps the cache at 5 GB (LRU). There is also a "Back up database now" button.
 - **Settings:** studio status, storage use, spend by month (estimated / calculated / possible extra / confirmed, kept separate), and model check dates with a warning after 30 days.
 - **Observed once, not reproducible:** right after many new route files were created, the dev server went into a "Compiled in 1ms" reload loop on one page. It didn't recur after a restart, and data/storage/SQLite writes were tested and ruled out as the trigger. Worth watching during development; it doesn't affect production builds.
+
+## Phase 9 — UI polish
+- **Root cause of the dev reload loop (found and fixed).** Turbopack watches everything under the project root. With the database and media inside the project (`data/`, `storage/`), the editor went into a Fast Refresh feedback loop (134 page reloads in 6 s). Moving the data outside the project gave 2 navigations and 0 recompiles.
+  - Runtime data now defaults to **`~/.pinpo`** (override with `PINPO_HOME`), and `npm run setup` migrates old in-project folders.
+  - *Deviation:* the plan's folder structure had `data/` and `storage/` in the repo root, still gitignored. The worker now reads `.env.local` from the project folder explicitly.
+- **WYSIWYG frame previews** in the storyboard (plan §13). They use the same `OverlayLayer` component the renderer uses, at full frame size and scaled down, over the original product photo or an "AI footage" placeholder, with the platform safe area dashed. The brand fonts are served to the browser from the bundled files through an allow-listed `/api/fonts/[file]` route.
+- **16:9 typography:** landscape frames scale type 1.4× (portrait and square are unchanged), so 16:9 text and outros no longer read small. The 16:9 outro snapshot was re-approved after visual review.
+- **Small fixes:** the new-ad form defaults to *Product showcase*; library thumbnails are capped in height on phones; the header wraps at 375px; every page was checked for horizontal scroll at 375px (none).

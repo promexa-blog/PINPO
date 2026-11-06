@@ -6,6 +6,7 @@ import { costSummary } from "./jobs/costs";
 import { getItems, exportGate, hasFinalAttestation, FINAL_ATTESTATION } from "./qa/reports";
 import { getAsset } from "./storage/assets";
 import { sha256 } from "./util";
+import { getMasterBrand } from "./brand/master";
 
 /** Read model for GET /api/versions/[vid] — side-effect free, ETag-able (plan §4, §13). */
 export function versionView(versionId: string) {
@@ -50,6 +51,7 @@ export function versionView(versionId: string) {
     productImages: brief.product.imageAssetIds.map((id) => product(id)).filter(Boolean),
     scenes: scenes.map((s, i) => ({ ...s, id: rows[i]!.id, status: rows[i]!.status, clipAssetId: rows[i]!.clip_asset_id, job: latestJobFor(rows[i]!.id) })),
     voiceovers: getVoiceovers(versionId),
+    brandColors: getMasterBrand()?.tokens.colors ?? {},
     composeJob: [...jobs].reverse().find((j) => j.type === "compose") ?? null,
     check: v.status === "draft" ? checkDraft(versionId) : null,
     costs: costSummary(versionId),

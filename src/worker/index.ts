@@ -3,7 +3,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { db, quickCheck, closeDb } from "@/server/db";
-import { paths, ensureDirs } from "@/server/paths";
+import { paths, ensureDirs, SOURCE_ROOT } from "@/server/paths";
 import { enqueue, releaseAll } from "@/server/jobs/queue";
 import { acquireWorkerLease, heartbeat, releaseWorkerLease, getWorker, WORKER_HEARTBEAT_MS } from "@/server/jobs/worker-lease";
 import { seedMasterBrand } from "@/server/brand/master";
@@ -18,7 +18,7 @@ import type { JobHandler } from "./types";
 
 // The worker is the ONLY process that reads FAL_KEY (plan §1). Next never needs it.
 for (const file of [".env.local", ".env"]) {
-  const p = path.join(paths.root, file);
+  const p = path.join(SOURCE_ROOT, file);
   if (existsSync(p)) process.loadEnvFile(p);
 }
 

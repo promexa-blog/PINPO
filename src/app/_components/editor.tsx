@@ -7,6 +7,8 @@ import { CATEGORY_LABEL, LANG_LABEL, type BriefInput, type Lang } from "@/lib/br
 import { PLATFORMS } from "@/lib/platforms";
 import type { Finishing, SceneEdit, VersionSettings, VoiceoverSegment } from "@/lib/version";
 import { Waveform } from "./waveform";
+import { FramePreview } from "./frame-preview";
+import type { BrandColors } from "@/lib/brand-layout/tokens";
 import { Button, Checkbox, Field, Input, Section, Select, Status, Textarea, api, usd } from "./ui";
 import { Upload } from "./upload";
 
@@ -443,6 +445,17 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
             <ol className="grid gap-4">
               {draft.scenes.map((s, i) => (
                 <li key={i} className="rounded-lg border border-dm-border p-3">
+                  <div className="flex flex-col gap-4 sm:flex-row">
+                  <FramePreview
+                    platform={draft.platform}
+                    colors={view.brandColors as unknown as BrandColors}
+                    lang={finishing.outroLang}
+                    layout={s.overlay.layout}
+                    lines={s.overlay.byLang[finishing.outroLang] ?? []}
+                    productSrc={s.productAssetId ? `/api/assets/${s.productAssetId}` : null}
+                    aiScene={s.sceneType !== "product_original"}
+                  />
+                  <div className="min-w-0 flex-1">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="text-sm font-bold">
                       {i + 1}. {s.label}
@@ -509,6 +522,8 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                         {(s.overlay.byLang[finishing.outroLang] ?? []).length === 0 ? <span className="text-dm-secondary">None</span> : null}
                       </p>
                     </div>
+                  </div>
+                  </div>
                   </div>
                 </li>
               ))}

@@ -23,7 +23,9 @@ export const SCALE = { headline: 5.2, subheadline: 3.0, body: 2.4, cta: 2.8, cap
 
 /** 9:16 frames are tall; scale type off the shorter side so 16:9 and 9:16 read alike. */
 export function px(frame: Frame, pct: number): number {
-  const basis = Math.min(frame.height, frame.width * (16 / 9));
+  // Landscape frames are viewed larger (TV/desktop) but have less height: scale type up 1.4×
+  // there so 16:9 text isn't tiny (Phase 9 polish). Portrait/square keep the plan's scale.
+  const basis = frame.width > frame.height ? frame.height * 1.4 : Math.min(frame.height, frame.width * (16 / 9));
   return Math.round((basis * pct) / 100);
 }
 

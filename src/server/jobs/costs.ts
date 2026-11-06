@@ -1,5 +1,5 @@
 import "../guard";
-import { db } from "../db";
+import { db, tx } from "../db";
 import { newId, now } from "../util";
 
 /** Cost ledger (plan §10 [v2.2]): one row per fal request attempt and kind; never double counted. */
@@ -22,6 +22,8 @@ export interface CostEntryInput {
 }
 
 export function addCost(e: CostEntryInput): void {
+  // Plan §10: mock attempts cost nothing. Estimates keep list prices so mock runs show what a real one would cost.
+  if (e.mock && e.kind !== "estimated") e = { ...e, usd: 0 };
   db()
     .prepare(
       `INSERT INTO cost_entries (id, version_id, job_id, scene_id, kind, usd, attempt, fal_request_id, mock, possible_duplicate, pricing_version, basis_json, note, at)
@@ -77,6 +79,24 @@ export function costSummary(versionId: string): CostSummary {
 /** Plan §10: once confirmed data exists for a request, its calculated/exposure rows are reconciled. */
 export function reconcile(falRequestId: string): void {
   db().prepare("UPDATE cost_entries SET reconciled = 1 WHERE fal_request_id = ? AND kind IN ('calculated','exposure_failed','exposure_canceled','exposure_duplicate')").run(falRequestId);
+}
+
+/**
+ * Manually confirmed amount from the fal dashboard (plan §10, C2/C7). One per version: a new
+ * confirmation replaces the previous one, and the version's calculated/exposure rows are marked
+ * reconciled so totals use the confirmed figure instead of adding both.
+ */
+export function confirmManual(versionId: string, usd: number, note: string): void {
+  tx(() => {
+    db().prepare("DELETE FROM cost_entries WHERE version_id = ? AND kind = 'confirmed_manual'").run(versionId);
+    addCost({ kind: "confirmed_manual", usd, versionId, note });
+    db().prepare("UPDATE cost_entries SET reconciled = 1 WHERE version_id = ? AND kind IN ('calculated','exposure_failed','exposure_canceled','exposure_duplicate')").run(versionId);
+  });
+}
+
+/** Deleting a version keeps its spend history: rows are detached, not deleted (monthly totals stay true). */
+export function detachVersionCosts(versionId: string): void {
+  db().prepare("UPDATE cost_entries SET version_id = NULL, job_id = NULL, scene_id = NULL, note = TRIM(COALESCE(note, '') || ' (version deleted)') WHERE version_id = ?").run(versionId);
 }
 
 /** Monthly totals for Settings (plan §10): categories kept separate, never summed into "billed". */

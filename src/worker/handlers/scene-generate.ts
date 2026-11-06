@@ -12,6 +12,7 @@ import { getProvider, ProviderError, type ProviderStatus } from "@/server/fal/pr
 import { absolutePath, getAsset, putFile } from "@/server/storage/assets";
 import { isDiskFullError } from "@/server/storage/disk";
 import { enqueue } from "@/server/jobs/queue";
+import { getWorker } from "@/server/jobs/worker-lease";
 import { addCost } from "@/server/jobs/costs";
 import type { SceneJobInput } from "@/server/jobs/generate";
 import { AppError, now } from "@/server/util";
@@ -142,8 +143,14 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
           if (job.submit_state === "submitting" && !job.fal_request_id) {
             // Crash between submit and storing the request ID (plan §5, Phase 0 recovery rule).
             const started = job.submit_started_at ?? now();
-            const found = await provider.findRequests(endpoint, started - 5_000, started + 120_000);
-            const known = new Set((db().prepare("SELECT fal_request_id FROM jobs WHERE fal_request_id IS NOT NULL").all() as { fal_request_id: string }[]).map((r) => r.fal_request_id));
+            // The lost request was sent by the previous worker before it died: anything sent after this
+            // worker started belongs to another job, so the window ends at our start (audit #11).
+            const workerStart = getWorker()?.started_at ?? now();
+            const windowEnd = Math.max(started, Math.min(started + 120_000, workerStart));
+            const found = await provider.findRequests(endpoint, started - 5_000, windowEnd);
+            const known = new Set(
+              (db().prepare("SELECT fal_request_id FROM jobs WHERE fal_request_id IS NOT NULL UNION SELECT fal_request_id FROM cost_entries WHERE fal_request_id IS NOT NULL").all() as { fal_request_id: string }[]).map((r) => r.fal_request_id),
+            );
             const candidates = (found ?? []).filter((id) => !known.has(id));
             if (found && candidates.length === 1) {
               ctx.transition({ stage: "in_queue", submitState: "submitted", falRequestId: candidates[0]!, message: "recovered request after crash (single match)" });
@@ -282,7 +289,22 @@ function succeed(ctx: JobContext, input: SceneJobInput, clipAssetId: string, dat
   });
 }
 
+/**
+ * A fal request we stop using (failed, regenerated, abandoned after fal accepted it) may still be
+ * billed. Record it once as possible-charge exposure unless the ledger already accounts for it.
+ */
+function recordAbandonedRequest(ctx: JobContext, input: SceneJobInput, note: string): void {
+  const job = ctx.refresh();
+  if (!job.fal_request_id || !input.modelId) return;
+  const accounted = db().prepare("SELECT 1 FROM cost_entries WHERE fal_request_id = ? AND kind IN ('calculated','exposure_failed','exposure_canceled')").get(job.fal_request_id);
+  if (accounted) return;
+  const model = getModel(input.modelId);
+  const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate, input.mode ?? "t2v", input.clipAudio);
+  addCost({ kind: "exposure_failed", usd, versionId: input.versionId, jobId: job.id, sceneId: input.sceneId, attempt: job.attempt, falRequestId: job.fal_request_id, pricingVersion: pricingVersion(model, input.pricingDate), mock: process.env.FAL_MOCK === "1", note });
+}
+
 function regenerateOrFail(ctx: JobContext, input: SceneJobInput, code: string, message: string): void {
+  recordAbandonedRequest(ctx, input, `request abandoned: ${message}`.slice(0, 300));
   const job = ctx.refresh();
   if (job.attempt < job.max_attempts) {
     ctx.transition({
@@ -304,6 +326,7 @@ function regenerateOrFail(ctx: JobContext, input: SceneJobInput, code: string, m
 }
 
 function fail(ctx: JobContext, input: SceneJobInput, code: string, message: string): void {
+  recordAbandonedRequest(ctx, input, `scene failed: ${message}`.slice(0, 300));
   tx(() => {
     ctx.transition({ status: "failed", errorCode: code, errorMessage: message, message });
     db().prepare("UPDATE scenes SET status = 'failed' WHERE id = ?").run(input.sceneId);
@@ -345,6 +368,7 @@ function handleError(ctx: JobContext, input: SceneJobInput, err: unknown): void 
   }
   const message = err instanceof Error ? err.message : String(err);
   if (job.attempt < job.max_attempts && !(err instanceof AppError && err.status < 500)) {
+    recordAbandonedRequest(ctx, input, `request abandoned: ${message}`.slice(0, 300));
     ctx.transition({ status: "retry_wait", stage: "preparing", attempt: job.attempt + 1, nextRunAt: now() + 10_000, falRequestId: null, submitState: "none", resultJson: {}, errorCode: "ERROR", errorMessage: message, message: `${message} — retrying` });
     return;
   }

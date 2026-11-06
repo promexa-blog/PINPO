@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { route, readJson } from "@/server/http";
-import { addCost } from "@/server/jobs/costs";
+import { confirmManual } from "@/server/jobs/costs";
 import { requireVersion } from "@/server/db/repos/versions";
 
 export const runtime = "nodejs";
@@ -11,6 +11,6 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ vid: str
   const { vid } = await ctx.params;
   requireVersion(vid);
   const { usd, note } = await readJson(req, z.object({ usd: z.number().min(0).max(10_000), note: z.string().trim().min(3).max(300) }));
-  addCost({ kind: "confirmed_manual", usd, versionId: vid, note });
+  confirmManual(vid, usd, note);
   return Response.json({ ok: true }, { status: 201 });
 });

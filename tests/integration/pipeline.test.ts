@@ -270,4 +270,19 @@ describe("vertical slice pipeline (mock fal)", () => {
     expect(Date.now() - t0).toBeLessThan(10_000);
     expect(requireVersion(versionId).status).toBe("canceled");
   }, 120_000);
+
+  it("a cancel during compose ends canceled and never publishes a final video (reliability audit #3)", async () => {
+    ensureWorker();
+    const versionId = await makeAd("cancel-compose");
+    await startGenerate(versionId);
+    await waitFor(() => !!db().prepare("SELECT 1 FROM jobs WHERE version_id = ? AND type = 'compose' AND status = 'running'").get(versionId), 120_000, "compose running");
+    cancelVersion(versionId);
+    await waitFor(() => !!db().prepare("SELECT 1 FROM jobs WHERE version_id = ? AND type = 'compose' AND status IN ('canceled','succeeded','failed')").get(versionId), 30_000, "compose stopped");
+    const compose = db().prepare("SELECT status FROM jobs WHERE version_id = ? AND type = 'compose'").get(versionId) as { status: string };
+    expect(compose.status).toBe("canceled");
+    const v = requireVersion(versionId);
+    expect(v.status).toBe("canceled");
+    expect(v.final_asset_id).toBeNull();
+    expect(db().prepare("SELECT 1 FROM jobs WHERE version_id = ? AND type = 'qa'").get(versionId)).toBeUndefined();
+  }, 180_000);
 });

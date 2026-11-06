@@ -2,6 +2,7 @@ import "../../guard";
 import { db, tx } from "..";
 import { getBrand } from "../../brand/kits";
 import { newId, now, AppError } from "../../util";
+import { detachVersionCosts } from "../../jobs/costs";
 import { requireVersion, type VersionRow } from "./versions";
 
 /** Non-destructive versioning, duplication and deletion (plan §3, §12). */
@@ -96,9 +97,12 @@ export function deleteVersion(versionId: string): void {
     const ad = db().prepare("SELECT current_version_id FROM ads WHERE id = ?").get(v.ad_id) as { current_version_id: string };
     if (ad.current_version_id === versionId) throw new AppError("VERSION_CURRENT", "You can't delete the current version.", 409);
     if (["queued", "generating", "composing"].includes(v.status)) throw new AppError("VERSION_RUNNING", "This version is still running.", 409);
+    // A canceled version may still have jobs stopping (cancel is cooperative): don't pull rows from under them.
+    const live = db().prepare("SELECT COUNT(*) AS n FROM jobs WHERE version_id = ? AND status NOT IN ('succeeded','failed','canceled')").get(versionId) as { n: number };
+    if (live.n) throw new AppError("VERSION_STOPPING", "This version is still stopping. Try again in a few seconds.", 409);
     const jobIds = db().prepare("SELECT id FROM jobs WHERE version_id = ?").all(versionId) as { id: string }[];
     for (const j of jobIds) db().prepare("DELETE FROM job_events WHERE job_id = ?").run(j.id);
-    db().prepare("DELETE FROM cost_entries WHERE version_id = ?").run(versionId);
+    detachVersionCosts(versionId);
     db().prepare("DELETE FROM jobs WHERE version_id = ?").run(versionId);
     db().prepare("DELETE FROM qa_items WHERE report_id IN (SELECT id FROM qa_reports WHERE version_id = ?)").run(versionId);
     db().prepare("DELETE FROM qa_reports WHERE version_id = ?").run(versionId);

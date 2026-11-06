@@ -108,3 +108,20 @@ describe("version lifecycle", () => {
     expect(db().prepare("SELECT 1 FROM ads WHERE id = ?").get(adId)).toBeUndefined();
   });
 });
+
+describe("logo pinning (plan §3: old ads never change)", () => {
+  it("an ad made before a logo change keeps the seeded logo of its revision", async () => {
+    const b = getDefaultBrand()!;
+    const seedLogo = b.logos[0]!;
+    const { versionId } = createAd({ name: "logo pin", templateKey: "product_showcase", platform: "instagram_reels" });
+    const sharp = (await import("sharp")).default;
+    const png = await sharp({ create: { width: 320, height: 80, channels: 4, background: "#0C1C28" } }).png().toBuffer();
+    const next = await putBuffer(png, { kind: "image", mime: "image/png", ext: "png", source: "upload", width: 320, height: 80 });
+    unlockBrand(b.id);
+    const after = updateBrand(b.id, { logoAssetId: next.id, note: "new logo" });
+    expect(after.logos[0]?.assetId).toBe(next.id);
+    const old = brandForVersion(versionId).logos[0]!;
+    expect(old.assetId).toBe(seedLogo.assetId);
+    expect(old.pinnedSha256).toBe(seedLogo.pinnedSha256);
+  });
+});

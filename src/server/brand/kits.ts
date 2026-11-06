@@ -85,6 +85,10 @@ function logosFor(kitId: string, tokens: BrandTokens): BrandLogo[] {
     const a = getAsset(spec.assetId);
     return a ? [{ variant: "horizontal", assetId: a.id, pinnedSha256: spec.sha256, width: a.width, height: a.height, temporary: !!spec.temporary }] : [];
   }
+  // Seeded (file-based) logo: resolve by the hash pinned in THIS revision, so a later logo change on
+  // the brand never alters ads made with an older revision (assets are content-addressed by sha256).
+  const pinned = db().prepare("SELECT id, width, height, temporary FROM assets WHERE sha256 = ?").get(spec.sha256) as { id: string; width: number | null; height: number | null; temporary: number } | undefined;
+  if (pinned) return [{ variant: "horizontal", assetId: pinned.id, pinnedSha256: spec.sha256, width: pinned.width, height: pinned.height, temporary: pinned.temporary === 1 }];
   const rows = db()
     .prepare(`SELECT l.variant, l.asset_id, l.pinned_sha256, a.width, a.height, a.temporary FROM brand_kit_logos l JOIN assets a ON a.id = l.asset_id WHERE l.brand_kit_id = ?`)
     .all(kitId) as { variant: string; asset_id: string; pinned_sha256: string; width: number | null; height: number | null; temporary: number }[];

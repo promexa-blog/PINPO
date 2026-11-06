@@ -30,6 +30,9 @@ import { safeBox } from "@/lib/brand-layout/tokens";
 import { AppError, now, sha256 } from "@/server/util";
 import type { JobHandler, JobContext } from "../types";
 
+/** Thrown between stages when the user canceled; the job ends as canceled, never "ready". */
+class ComposeCanceled extends Error {}
+
 /** Final composition (plan §6): normalize → brand graphics → encode → validate → finalize + QA. */
 export const composeHandler: JobHandler = {
   type: "compose",
@@ -48,6 +51,10 @@ export const composeHandler: JobHandler = {
       await compose(ctx, versionId, dir);
     } catch (err) {
       if (ctx.signal.aborted) throw err;
+      if (err instanceof ComposeCanceled) {
+        ctx.transition({ status: "canceled", message: "canceled during compose" });
+        return;
+      }
       const job = ctx.refresh();
       if (isDiskFullError(err)) {
         ctx.transition({ status: "blocked_disk", nextRunAt: now() + 60_000, errorCode: "DISK_FULL", errorMessage: "Disk is full", message: "paused: disk full" });
@@ -60,13 +67,17 @@ export const composeHandler: JobHandler = {
       }
       tx(() => {
         ctx.transition({ status: "failed", errorCode: "COMPOSE_FAILED", errorMessage: message.slice(0, 1000), message: "compose failed" });
-        db().prepare("UPDATE ad_versions SET status = 'failed', error_code = 'COMPOSE_FAILED', error_message = ?, updated_at = ? WHERE id = ?").run(message.slice(0, 500), now(), versionId);
+        db().prepare("UPDATE ad_versions SET status = 'failed', error_code = 'COMPOSE_FAILED', error_message = ?, updated_at = ? WHERE id = ? AND status = 'composing'").run(message.slice(0, 500), now(), versionId);
       });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   },
 };
+
+function stopIfCanceled(ctx: JobContext): void {
+  if (ctx.refresh().cancel_requested) throw new ComposeCanceled();
+}
 
 async function compose(ctx: JobContext, versionId: string, dir: string): Promise<void> {
   const v = requireVersion(versionId);
@@ -105,6 +116,7 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   }
 
   // 2. Brand graphics: overlays + outro (official logo, tokens only).
+  stopIfCanceled(ctx);
   ctx.transition({ stage: "rendering_overlays", message: "rendering brand overlays and outro" });
   const timeline = timelineFor(scenes, v.pacing);
   const overlays: { file: string; startS: number; endS: number; motion: "fade-up" | "slide-in" | "scale-in" | "logo-reveal"; words: number; scene: number }[] = [];
@@ -138,6 +150,7 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   await outroClip(outroPng.file, outroFile, { width: W, height: H, durationS: OUTRO_S }, { signal });
 
   // 3. Encode.
+  stopIfCanceled(ctx);
   ctx.transition({ stage: "encoding", message: fallback ? "encoding (fallback: simple crossfades, no ducking)" : "encoding final video", progress: 0 });
   const music = finishing.musicAssetId ? getAsset(finishing.musicAssetId) : undefined;
   const hasMusic = !!music && finishing.audioMode !== "clip_only";
@@ -209,12 +222,14 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   }
 
   // 4. Technical validation (plan §6).
+  stopIfCanceled(ctx);
   ctx.transition({ stage: "validating", message: "validating final video", progress: 1 });
   const expectSound = hasMusic || settings.clipAudio || voSpecs.length > 0;
   const tech = await validateFinal(out, { width: W, height: H, durationS: tl.totalS }, { expectSound }, { signal });
   if (!tech.ok) throw new AppError("FINAL_INVALID", tech.checks.filter((c) => c.status === "fail").map((c) => `${c.key}: ${c.message}`).join("; "), 500);
 
   // 5. Finalize: store, thumbnail, QA reports, ready.
+  stopIfCanceled(ctx);
   ctx.transition({ stage: "finalizing", message: "saving and running QA" });
   const final = await putFile(out, {
     kind: "video",
@@ -236,10 +251,13 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   const technicalItems: QaItem[] = tech.checks.map((c) => ({ check: `technical_${c.key}`, method: "automated", status: c.status, message: c.message, evidence: c.value }));
   const creative = await creativeItems({ v, scenes, rows, brief, brand, lang, overlays, timeline: tl, music, dir, ctaText, settingsModel: settings.modelId, outroType: finishing.outroType, outroSsim: outroMatch });
 
+  stopIfCanceled(ctx);
   tx(() => {
+    // Only a version that is still composing becomes ready (a cancel may have landed meanwhile).
+    const done = db().prepare("UPDATE ad_versions SET status = 'ready', final_asset_id = ?, thumb_asset_id = ?, error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ? AND status = 'composing'").run(final.id, thumb.id, now(), versionId);
+    if (done.changes !== 1) throw new ComposeCanceled();
     writeReport(versionId, "technical", technicalItems);
     writeReport(versionId, "creative", creative);
-    db().prepare("UPDATE ad_versions SET status = 'ready', final_asset_id = ?, thumb_asset_id = ?, error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ?").run(final.id, thumb.id, now(), versionId);
     db().prepare("UPDATE ads SET updated_at = ? WHERE id = ?").run(now(), v.ad_id);
     refreshQaStatus(versionId);
     ctx.transition({ status: "succeeded", stage: "done", message: "final video ready", resultJson: { finalAssetId: final.id, durationS: tech.info?.durationS } });

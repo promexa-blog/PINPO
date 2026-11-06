@@ -12,11 +12,11 @@ import { normalizeClip, outroClip, thumbnail, PUSH_IN_ZOOM } from "@/server/medi
 import { buildComposeGraph, type XfadeKind } from "@/server/media/filtergraph";
 import { ffmpeg } from "@/server/media/run";
 import { probe } from "@/server/media/probe";
-import { validateFinal } from "@/server/media/validate";
+import { validateFinal, loudness } from "@/server/media/validate";
 import { compareProductRegion, PRODUCT_THRESHOLDS } from "@/server/media/product-check";
 import { absolutePath, getAsset, putFile } from "@/server/storage/assets";
 import { isDiskFullError } from "@/server/storage/disk";
-import { getBrief, getScenes, requireVersion, settingsOf, finishingOf } from "@/server/db/repos/versions";
+import { getBrief, getScenes, requireVersion, settingsOf, finishingOf, getVoiceovers } from "@/server/db/repos/versions";
 import { draftScenes, timelineFor, brandLines } from "@/server/planning/draft";
 import { OUTRO_S } from "@/server/planning/storyboard";
 import { complianceItems, type QaItem } from "@/server/qa/checks/compliance";
@@ -142,6 +142,16 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   // Fallback keeps the planned timeline (exact length) but uses plain crossfades and no ducking.
   const transitions: XfadeKind[] = scenes.map((s, i) => (i === scenes.length - 1 || fallback ? (s.creative.transitionOut === "cut" && i < scenes.length - 1 ? "cut" : "crossfade") : s.creative.transitionOut));
   const tl = timeline;
+  // Voiceover segments at absolute times: scene start + offset (plan §8).
+  const vos = getVoiceovers(versionId).filter((s) => !s.muted && s.scenePosition < tl.segments.length);
+  const voSpecs = vos.map((s) => ({
+    file: absolutePath(getAsset(s.assetId)!),
+    startS: tl.segments[s.scenePosition]!.startS + s.offsetS,
+    durationS: Math.min(s.durationS ?? tl.totalS, Math.max(0.1, tl.totalS - (tl.segments[s.scenePosition]!.startS + s.offsetS))),
+    volumeDb: s.volumeDb,
+    fadeInS: s.fadeInS,
+    fadeOutS: s.fadeOutS,
+  }));
   const g = buildComposeGraph({
     timeline: tl,
     transitions,
@@ -151,6 +161,8 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
     audioMode,
     hasMusic,
     musicVolumeDb: finishing.musicVolumeDb,
+    voiceovers: voSpecs,
+    duckClipUnderVoice: finishing.duckClipUnderVoice && !fallback,
   });
   const out = path.join(dir, "final.mp4");
   let lastPct = 0;
@@ -161,6 +173,7 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
       "-i", outroFile,
       ...overlays.flatMap((o) => ["-loop", "1", "-framerate", "30", "-t", String(tl.totalS), "-i", o.file]),
       ...(hasMusic ? ["-stream_loop", "-1", "-i", absolutePath(music!)] : []),
+      ...voSpecs.flatMap((s) => ["-i", s.file]),
       "-filter_complex", g.filter, "-map", g.videoOut, "-map", g.audioOut,
       "-r", "30", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-pix_fmt", "yuv420p",
       "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
@@ -179,9 +192,22 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
     },
   );
 
+  // 3b. Loudness correction (Phase 6 finding): single-pass loudnorm misses −14 LUFS when the mix is
+  // mostly silence + short speech. Measure, then apply the exact gain + −1.5 dBTP limiter (video copied).
+  const measured = await loudness(out, { signal });
+  if (measured !== null && measured > -60 && Math.abs(measured + 14) > 1) {
+    const corrected = path.join(dir, "final-lufs.mp4");
+    await ffmpeg(
+      ["-y", "-i", out, "-c:v", "copy", "-af", `volume=${(-14 - measured).toFixed(2)}dB,alimiter=limit=0.84:level=false,aresample=48000`, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", corrected],
+      { signal },
+    );
+    await rename(corrected, out);
+    ctx.log(`loudness corrected from ${measured.toFixed(1)} LUFS`);
+  }
+
   // 4. Technical validation (plan §6).
   ctx.transition({ stage: "validating", message: "validating final video", progress: 1 });
-  const expectSound = hasMusic || settings.clipAudio;
+  const expectSound = hasMusic || settings.clipAudio || voSpecs.length > 0;
   const tech = await validateFinal(out, { width: W, height: H, durationS: tl.totalS }, { expectSound }, { signal });
   if (!tech.ok) throw new AppError("FINAL_INVALID", tech.checks.filter((c) => c.status === "fail").map((c) => `${c.key}: ${c.message}`).join("; "), 500);
 
@@ -314,7 +340,11 @@ async function creativeItems(a: {
   items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas, brandLines: brandLines() }));
 
   // Rights (basic gate; full provenance checks come with Phase 7).
-  const used = [...a.rows.map((r) => getAsset(r.clip_asset_id ?? "")), ...a.scenes.map((s) => (s.productAssetId ? getAsset(s.productAssetId) : undefined)), a.music].filter((x): x is NonNullable<typeof x> => !!x);
+  const voiceovers = getVoiceovers(a.v.id).filter((s) => !s.muted);
+  const used = [...a.rows.map((r) => getAsset(r.clip_asset_id ?? "")), ...a.scenes.map((s) => (s.productAssetId ? getAsset(s.productAssetId) : undefined)), a.music, ...voiceovers.map((s) => getAsset(s.assetId))].filter((x): x is NonNullable<typeof x> => !!x);
+  // Voice talent consent (plan §8a, PV3).
+  const noConsent = voiceovers.filter((s) => !s.talentConsent);
+  if (noConsent.length) items.push({ check: "asset_rights", method: "automated", status: "fail", message: `${noConsent.length} voiceover(s) have no recorded consent from the voice artist for commercial ad use.` });
   const bad = used.filter((u) => u.commercial_use === "no");
   const unknown = used.filter((u) => u.commercial_use === "unknown");
   items.push({

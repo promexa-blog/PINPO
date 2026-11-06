@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { VersionView } from "@/server/views";
 import { CATEGORY_LABEL, LANG_LABEL, type BriefInput, type Lang } from "@/lib/brief";
 import { PLATFORMS } from "@/lib/platforms";
-import type { Finishing, SceneEdit, VersionSettings } from "@/lib/version";
+import type { Finishing, SceneEdit, VersionSettings, VoiceoverSegment } from "@/lib/version";
+import { Waveform } from "./waveform";
 import { Button, Checkbox, Field, Input, Section, Select, Status, Textarea, api, usd } from "./ui";
 import { Upload } from "./upload";
 
@@ -17,6 +18,7 @@ interface Draft {
   platform: VersionView["version"]["platform"];
   pacing: VersionView["version"]["pacing"];
   scenes: SceneEdit[];
+  voiceovers: VoiceoverSegment[];
 }
 
 interface ModelInfo {
@@ -58,7 +60,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
     }
     revision.current = v.version.revision;
     setView(v);
-    setDraft({ brief: v.brief, settings: v.settings, finishing: v.finishing, platform: v.version.platform, pacing: v.version.pacing, scenes: v.scenes.map(({ status: _s, clipAssetId: _c, job: _j, id: _id, ...s }) => s) });
+    setDraft({ brief: v.brief, settings: v.settings, finishing: v.finishing, platform: v.version.platform, pacing: v.version.pacing, scenes: v.scenes.map(({ status: _s, clipAssetId: _c, job: _j, id: _id, ...s }) => s), voiceovers: v.voiceovers.map(({ id: _i, durationS: _d, talentConsent: _t, commercialUse: _c, ...vo }) => vo) });
   }, [versionId, adId, router]);
 
   useEffect(() => {
@@ -511,6 +513,60 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                 </li>
               ))}
             </ol>
+          )}
+        </Section>
+        <Section id="voiceover" title="Voiceover" description="Upload recorded narration, attach it to a scene and set when it starts. Music is lowered automatically while the voice speaks.">
+          {draft.scenes.length === 0 ? (
+            <p className="text-sm text-dm-secondary">Build the storyboard first, then attach voiceover to its scenes.</p>
+          ) : (
+            <div className="grid gap-4">
+              {draft.voiceovers.map((vo, i) => {
+                const setVo = (patch: Partial<VoiceoverSegment>) => update({ voiceovers: draft.voiceovers.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+                const info = view.voiceovers.find((x) => x.assetId === vo.assetId);
+                return (
+                  <div key={`${vo.assetId}-${i}`} className="grid gap-3 rounded-lg border border-dm-border p-3">
+                    <Waveform assetId={vo.assetId} label={`voiceover ${i + 1}`} />
+                    <div className="grid gap-3 sm:grid-cols-5">
+                      <Field label="Scene" htmlFor={`vo-s-${i}`}>
+                        <Select id={`vo-s-${i}`} value={vo.scenePosition} onChange={(e) => setVo({ scenePosition: Number(e.target.value) })}>
+                          {draft.scenes.map((sc, k) => (
+                            <option key={k} value={k}>
+                              {k + 1}. {sc.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Starts after (s)" htmlFor={`vo-o-${i}`}>
+                        <Input id={`vo-o-${i}`} type="number" min={0} max={30} step={0.1} value={vo.offsetS} onChange={(e) => setVo({ offsetS: Number(e.target.value) })} />
+                      </Field>
+                      <Field label={`Volume (${vo.volumeDb} dB)`} htmlFor={`vo-v-${i}`}>
+                        <input id={`vo-v-${i}`} type="range" min={-20} max={10} step={1} value={vo.volumeDb} onChange={(e) => setVo({ volumeDb: Number(e.target.value) })} className="accent-[#0C1C28]" />
+                      </Field>
+                      <Field label="Fade in / out (s)" htmlFor={`vo-f-${i}`}>
+                        <div className="flex gap-2">
+                          <Input id={`vo-f-${i}`} aria-label="Fade in seconds" type="number" min={0} max={3} step={0.1} value={vo.fadeInS} onChange={(e) => setVo({ fadeInS: Number(e.target.value) })} />
+                          <Input aria-label="Fade out seconds" type="number" min={0} max={3} step={0.1} value={vo.fadeOutS} onChange={(e) => setVo({ fadeOutS: Number(e.target.value) })} />
+                        </div>
+                      </Field>
+                      <div className="flex flex-col justify-end gap-2">
+                        <Checkbox id={`vo-m-${i}`} checked={vo.muted} onChange={(v) => setVo({ muted: v })} label="Mute" />
+                        <Button type="button" variant="quiet" className="justify-start px-0" onClick={() => update({ voiceovers: draft.voiceovers.filter((_, j) => j !== i) })}>
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                    {info ? (
+                      <p className="text-xs text-dm-secondary">
+                        {info.durationS ? `${info.durationS.toFixed(1)}s long. ` : ""}
+                        {info.talentConsent ? "Voice artist consent recorded." : "No voice artist consent recorded — export will be blocked."}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {draft.voiceovers.length < 12 ? <Upload purpose="voiceover" label="Add a voiceover recording" onUploaded={(a) => update({ voiceovers: [...draft.voiceovers, { assetId: a.id, scenePosition: 0, offsetS: 0, volumeDb: 0, fadeInS: 0.1, fadeOutS: 0.2, muted: false }] })} /> : null}
+              <Checkbox id="vo-duck" checked={finishing.duckClipUnderVoice} onChange={(v) => update({ finishing: { ...finishing, duckClipUnderVoice: v } })} label="Also lower AI scene sound while the voice speaks" />
+            </div>
           )}
         </Section>
       </div>

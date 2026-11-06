@@ -1,6 +1,6 @@
 import "./guard";
 import { db } from "./db";
-import { getBrief, getScenes, requireVersion, settingsOf, finishingOf } from "./db/repos/versions";
+import { getBrief, getScenes, requireVersion, settingsOf, finishingOf, getVoiceovers } from "./db/repos/versions";
 import { checkDraft, draftScenes } from "./planning/draft";
 import { costSummary } from "./jobs/costs";
 import { getItems, exportGate, hasFinalAttestation, FINAL_ATTESTATION } from "./qa/reports";
@@ -49,6 +49,7 @@ export function versionView(versionId: string) {
     brief,
     productImages: brief.product.imageAssetIds.map((id) => product(id)).filter(Boolean),
     scenes: scenes.map((s, i) => ({ ...s, id: rows[i]!.id, status: rows[i]!.status, clipAssetId: rows[i]!.clip_asset_id, job: latestJobFor(rows[i]!.id) })),
+    voiceovers: getVoiceovers(versionId),
     composeJob: [...jobs].reverse().find((j) => j.type === "compose") ?? null,
     check: v.status === "draft" ? checkDraft(versionId) : null,
     costs: costSummary(versionId),

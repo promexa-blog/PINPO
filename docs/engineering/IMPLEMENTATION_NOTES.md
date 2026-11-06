@@ -47,3 +47,17 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - **Known limitations:**
   - Generated offer and group-buy lines (e.g. "Group price when 5 people join") are English in every ad language. No machine translation is done, because that would be invented copy.
   - The 16:9 outro reads small. This is flagged for the Phase 9 polish pass.
+
+## Phase 6 — audio
+- **Voiceover segments** are stored in `audio_tracks` and anchored by **scene position** (migration 002). Scene rows are recreated when the storyboard is rebuilt, so a `scene_id` foreign key would dangle.
+- **Mix:**
+  - The voiceover bus sits on top.
+  - Music is sidechain-ducked under the voiceover (ratio 12).
+  - Scene sound is optionally ducked under the voiceover.
+  - In "mix" mode, music is also ducked under scene sound.
+  - Test V1 measures this: music drops ≥ 8 dB during the voiceover, the voiceover starts within ±40 ms of its scheduled time, and the final is −14 ±2 LUFS.
+- **Loudness correction pass (finding).** Single-pass `loudnorm` produced −19.7 LUFS for a voiceover-only ad (mostly silence plus short speech). Compose now measures integrated loudness after encoding. If it's off by more than 1 LU, it re-encodes only the audio with the exact gain and an `alimiter` at −1.5 dBTP, copying the video stream.
+- **Deviations:**
+  - The plan had waveform peaks computed by the worker and served by `GET /api/assets/[id]/peaks`. The editor instead decodes the audio file in the browser (Web Audio API) and draws peaks itself. This avoids a worker job and an extra route for the same result, and the server stays free of ffmpeg work for previews.
+  - Audio uploads are checked with **ffprobe inside the Next upload route** (fast, bounded: ≤20 MB, ≤10 min). The rule "Next never runs ffmpeg" holds for generation and composition.
+- **Rights:** a voiceover without recorded voice-artist consent makes QA `asset_rights` **fail**, which blocks export (PV3). The draft check warns about it before you generate.

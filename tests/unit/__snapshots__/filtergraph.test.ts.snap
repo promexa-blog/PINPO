@@ -20,7 +20,7 @@ exports[`compose filtergraph (U6) > chains xfade/concat at timeline offsets with
 [vo0]fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,trim=duration=13.1,setpts=PTS-STARTPTS[vout];
 [5:a]aresample=48000,aformat=channel_layouts=stereo,volume=-8dB,atrim=duration=13.1,asetpts=PTS-STARTPTS,afade=t=in:d=0.5,afade=t=out:st=11.6:d=1.5[music];
 [a3]asplit=2[clipA][clipSC];
-[music][clipSC]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[ducked];
-[ducked][clipA]amix=inputs=2:duration=first:normalize=0[mixed];
+[music][clipSC]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[musicClip];
+[musicClip][clipA]amix=inputs=2:duration=first:normalize=0[mixed];
 [mixed]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo,apad,atrim=duration=13.1,asetpts=PTS-STARTPTS[aout]"
 `;

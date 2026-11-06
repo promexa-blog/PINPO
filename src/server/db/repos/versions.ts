@@ -2,7 +2,7 @@ import "../../guard";
 import { randomInt } from "node:crypto";
 import { db, tx } from "..";
 import { BriefInput, type ClaimInput } from "@/lib/brief";
-import { Finishing, VersionSettings, type SceneEdit, type VersionPatch } from "@/lib/version";
+import { Finishing, VersionSettings, type SceneEdit, type VersionPatch, type VoiceoverSegment } from "@/lib/version";
 import type { PlatformKey } from "@/lib/platforms";
 import { getMasterBrand } from "../../brand/master";
 import { classify, primaryCategory } from "../../brief/claims";
@@ -70,7 +70,7 @@ export interface ClaimRow {
   testimonial_consent: number;
 }
 
-export const DEFAULT_FINISHING: Finishing = { outroType: "standard", outroLang: "en", audioMode: "music_only", musicAssetId: null, musicVolumeDb: -8 };
+export const DEFAULT_FINISHING: Finishing = { outroType: "standard", outroLang: "en", audioMode: "music_only", musicAssetId: null, musicVolumeDb: -8, duckClipUnderVoice: true };
 
 export function defaultBrief(platform: PlatformKey): BriefInput {
   return BriefInput.parse({
@@ -248,9 +248,46 @@ export function patchDraft(versionId: string, patch: VersionPatch): VersionRow {
     const claims = patch.claims ?? patch.brief?.claims;
     if (claims) writeClaims(versionId, claims);
     if (patch.scenes) writeScenes(versionId, patch.scenes);
+    if (patch.voiceovers) writeVoiceovers(versionId, patch.voiceovers);
     if (patch.name) db().prepare("UPDATE ads SET name = ?, updated_at = ? WHERE id = ?").run(patch.name, now(), v.ad_id);
     return requireVersion(versionId);
   });
+}
+
+export function writeVoiceovers(versionId: string, segs: VoiceoverSegment[]): void {
+  db().prepare("DELETE FROM audio_tracks WHERE version_id = ? AND kind = 'voiceover'").run(versionId);
+  const ins = db().prepare(
+    `INSERT INTO audio_tracks (id, version_id, kind, scene_position, asset_id, offset_s, volume_db, fade_in_s, fade_out_s, duck, muted, source)
+     VALUES (?, ?, 'voiceover', ?, ?, ?, ?, ?, ?, 1, ?, 'upload')`,
+  );
+  for (const s of segs) {
+    const a = db().prepare("SELECT kind FROM assets WHERE id = ?").get(s.assetId) as { kind: string } | undefined;
+    if (a?.kind !== "audio") throw new AppError("NOT_AUDIO", "Voiceover must be an uploaded audio file.", 422);
+    ins.run(newId("trk"), versionId, s.scenePosition, s.assetId, s.offsetS, s.volumeDb, s.fadeInS, s.fadeOutS, s.muted ? 1 : 0);
+  }
+}
+
+export function getVoiceovers(versionId: string): (VoiceoverSegment & { id: string; durationS: number | null; talentConsent: boolean; commercialUse: string })[] {
+  return (
+    db()
+      .prepare(
+        `SELECT t.*, a.duration_s, a.talent_consent, a.commercial_use FROM audio_tracks t JOIN assets a ON a.id = t.asset_id
+         WHERE t.version_id = ? AND t.kind = 'voiceover' ORDER BY t.scene_position, t.offset_s`,
+      )
+      .all(versionId) as { id: string; asset_id: string; scene_position: number; offset_s: number; volume_db: number; fade_in_s: number; fade_out_s: number; muted: number; duration_s: number | null; talent_consent: number; commercial_use: string }[]
+  ).map((r) => ({
+    id: r.id,
+    assetId: r.asset_id,
+    scenePosition: r.scene_position,
+    offsetS: r.offset_s,
+    volumeDb: r.volume_db,
+    fadeInS: r.fade_in_s,
+    fadeOutS: r.fade_out_s,
+    muted: !!r.muted,
+    durationS: r.duration_s,
+    talentConsent: !!r.talent_consent,
+    commercialUse: r.commercial_use,
+  }));
 }
 
 export function listAds() {

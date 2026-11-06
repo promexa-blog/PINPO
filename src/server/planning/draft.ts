@@ -8,7 +8,7 @@ import { buildStoryboard, OUTRO_S, OUTRO_TRANSITION_S, type ClaimRecord, type St
 import { computeTimeline, type Timeline } from "./timeline";
 import { transitionSeconds, type Pacing } from "./creative";
 import { estimateCost, type Estimate } from "./estimate";
-import { getBrief, getScenes, requireVersion, sceneToEdit, settingsOf, finishingOf, writeScenes, type VersionRow } from "../db/repos/versions";
+import { getBrief, getScenes, requireVersion, sceneToEdit, settingsOf, finishingOf, writeScenes, getVoiceovers, type VersionRow } from "../db/repos/versions";
 import { tx } from "../db";
 import { complianceItems, type QaItem } from "../qa/checks/compliance";
 import { indiaToday } from "../brief/offers";
@@ -160,6 +160,21 @@ export function checkDraft(versionId: string): DraftCheck {
     if (s.sceneType === "ai_reference" && !model.endpoints.ref) add("fail", "scene_type", `Scene ${i + 1}: ${model.label} can't use reference images — rebuild the storyboard or pick Seedance, MiniMax or Gemini.`);
     if (s.sceneType === "ai_from_product" && !model.endpoints.i2v) add("fail", "scene_type", `Scene ${i + 1}: ${model.label} can't start from a photo.`);
   });
+  // Voiceover timing (plan §8, V2): warn when a segment runs past its scene or past the ad end.
+  if (timeline) {
+    for (const vo of getVoiceovers(versionId).filter((s) => !s.muted)) {
+      const seg = timeline.segments[vo.scenePosition];
+      if (!seg) {
+        add("fail", "voiceover", `A voiceover is attached to scene ${vo.scenePosition + 1}, which no longer exists.`);
+        continue;
+      }
+      const start = seg.startS + vo.offsetS;
+      const end = start + (vo.durationS ?? 0);
+      if (end > timeline.totalS + 0.01) add("warn", "voiceover", `Voiceover on scene ${vo.scenePosition + 1} runs ${(end - timeline.totalS).toFixed(1)}s past the end of the ad and will be cut.`);
+      else if (end > seg.endS + 0.01) add("warn", "voiceover", `Voiceover on scene ${vo.scenePosition + 1} runs ${(end - seg.endS).toFixed(1)}s into the next scene.`);
+      if (!vo.talentConsent) add("warn", "voiceover", `Voiceover on scene ${vo.scenePosition + 1}: no voice-artist consent recorded — export will be blocked.`);
+    }
+  }
   const brand = getMasterBrand();
   const outroText = brief.cta[finishing.outroLang] ?? "";
   if (finishing.outroType === "promotional" && !brief.offers.priceInr && !brief.offers.groupBuy) add("fail", "outro", "The Promotional outro needs a price or group-buy offer — add one in Price & offer, or pick another outro.");

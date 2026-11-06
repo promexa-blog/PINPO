@@ -25,6 +25,8 @@ export const Finishing = z.object({
   audioMode: AudioModeSchema,
   musicAssetId: z.string().regex(/^ast_[a-f0-9]{20}$/).nullable(),
   musicVolumeDb: z.number().min(-30).max(6),
+  /** Lower scene sound under the voiceover too (music always ducks under voiceover). */
+  duckClipUnderVoice: z.boolean().default(true),
 });
 export type Finishing = z.infer<typeof Finishing>;
 
@@ -61,6 +63,17 @@ export const SceneEdit = z.object({
 });
 export type SceneEdit = z.infer<typeof SceneEdit>;
 
+export const VoiceoverSegment = z.object({
+  assetId: z.string().regex(/^ast_[a-f0-9]{20}$/),
+  scenePosition: z.number().int().min(0).max(11),
+  offsetS: z.number().min(0).max(30),
+  volumeDb: z.number().min(-20).max(10),
+  fadeInS: z.number().min(0).max(3),
+  fadeOutS: z.number().min(0).max(3),
+  muted: z.boolean().default(false),
+});
+export type VoiceoverSegment = z.infer<typeof VoiceoverSegment>;
+
 export const VersionPatch = z.object({
   revision: z.number().int().min(0),
   name: z.string().trim().min(1).max(120).optional(),
@@ -71,5 +84,6 @@ export const VersionPatch = z.object({
   platform: z.enum(["instagram_reels", "instagram_story", "youtube_shorts", "instagram_feed", "facebook_feed", "youtube_instream"]).optional(),
   pacing: PacingSchema.optional(),
   scenes: z.array(SceneEdit).max(12).optional(),
+  voiceovers: z.array(VoiceoverSegment).max(12).optional(),
 });
 export type VersionPatch = z.infer<typeof VersionPatch>;

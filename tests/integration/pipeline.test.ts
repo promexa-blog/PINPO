@@ -15,6 +15,9 @@ import { getItems, exportGate, acknowledge, attest } from "@/server/qa/reports";
 import { getAsset, absolutePath } from "@/server/storage/assets";
 import { probe } from "@/server/media/probe";
 import { renderer } from "@/server/render/browser";
+import { ffmpeg } from "@/server/media/run";
+import { readFileSync } from "node:fs";
+import { paths } from "@/server/paths";
 
 /**
  * End-to-end with the mock provider (plan I1, I3, I9, I10, C3, Q-gate): a real worker process
@@ -163,6 +166,28 @@ describe("vertical slice pipeline (mock fal)", () => {
     const items = getItems(versionId);
     expect(items.filter((i) => i.status === "fail")).toEqual([]);
     expect(items.find((i) => i.check === "end_card_correctness")?.message).toMatch(/Promotional/);
+  }, 300_000);
+
+  it("warns about voiceover timing (V2) and blocks export without voice consent (PV3)", async () => {
+    ensureWorker();
+    const versionId = await makeAd("voiceover");
+    const wav = path.join(paths.work, "vo-test.wav");
+    await ffmpeg(["-y", "-f", "lavfi", "-i", "sine=f=800:d=6:sample_rate=48000", wav]);
+    const vo = await storeUpload(readFileSync(wav), "vo.wav", UploadMeta.parse({ purpose: "voiceover", provenance: { sourceType: "recorded_voice", license: "Owned by DemandMesh", commercialUse: "yes", talentConsent: false } }));
+    const v = requireVersion(versionId);
+    patchDraft(versionId, { revision: v.revision, voiceovers: [{ assetId: vo.id, scenePosition: 2, offsetS: 1, volumeDb: 0, fadeInS: 0.1, fadeOutS: 0.2, muted: false }] });
+    const check = checkDraft(versionId);
+    expect(check.warnings.map((w) => w.message).join(" ")).toMatch(/runs .* (past the end|into the next scene)/);
+    expect(check.warnings.map((w) => w.message).join(" ")).toMatch(/no voice-artist consent/);
+    await startGenerate(versionId);
+    await waitFor(() => ["ready", "failed"].includes(requireVersion(versionId).status), 240_000, "voiceover version");
+    expect(requireVersion(versionId).status, requireVersion(versionId).error_message ?? "").toBe("ready");
+    const rights = getItems(versionId).filter((i) => i.check === "asset_rights");
+    expect(rights.some((i) => i.status === "fail" && /consent/.test(i.message))).toBe(true);
+    attest(versionId);
+    expect(exportGate(versionId).ok).toBe(false);
+    const tech = getItems(versionId).find((i) => i.check === "technical_loudness");
+    expect(tech?.status).toBe("pass");
   }, 300_000);
 
   it("retries a failing fal run and records failed-attempt exposure (I9, C3)", async () => {

@@ -46,6 +46,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "models:check": "tsx scripts/models-check.ts"
   }
 }

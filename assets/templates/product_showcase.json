@@ -1,0 +1,77 @@
+{
+  "key": "product_showcase",
+  "name": "Product showcase",
+  "description": "Reveal the product, show its detail and a real use moment, land the benefit, end with a clear call to action.",
+  "platforms": ["instagram_reels", "instagram_story", "youtube_shorts", "instagram_feed", "facebook_feed", "youtube_instream"],
+  "lengths": [15, 30, 45, 60],
+  "defaultOutro": "standard",
+  "cta": { "placement": "final_scene_and_outro" },
+  "scenes": [
+    {
+      "role": "hook",
+      "label": "Hook — product reveal",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Open on the real product with a confident reveal so the viewer knows what this is within two seconds.",
+      "productMotion": "push-in",
+      "overlay": { "source": "product_name", "layout": "centered", "motion": "scale-in" }
+    },
+    {
+      "role": "hero_detail",
+      "label": "Hero detail",
+      "weight": 1.2,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Close, tactile look at the product's material and finish.",
+      "promptScaffold": "Close-up product shot of {appearance}. {camera}. {lighting}. Set on {setting}. {toneMood}.",
+      "overlay": { "source": "claim:0", "layout": "lower_third", "motion": "fade-up" }
+    },
+    {
+      "role": "use_moment",
+      "label": "Use moment",
+      "weight": 1.4,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "A real everyday moment where the product fits the audience's life.",
+      "promptScaffold": "{audienceWho} in {setting}, an everyday moment where a {categoryNoun} would be useful. {camera}. {lighting}. {toneMood}.",
+      "overlay": { "source": "claim:1", "layout": "lower_third", "motion": "fade-up" }
+    },
+    {
+      "role": "benefit",
+      "label": "Benefit",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "Hold on the product while the strongest confirmed benefit lands.",
+      "productMotion": "parallax",
+      "overlay": { "source": "claim:2", "layout": "split_headline", "motion": "slide-in" }
+    },
+    {
+      "role": "lifestyle",
+      "label": "Lifestyle beat",
+      "weight": 1.2,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 45,
+      "visualDirection": "A warm, aspirational beat that matches the campaign tone.",
+      "promptScaffold": "{audienceWho} enjoying a relaxed moment in {setting}. {camera}. {lighting}. {toneMood}.",
+      "overlay": { "source": "claim:3", "layout": "lower_third", "motion": "fade-up" }
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 0.9,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The product with the offer (if any) and the call to action.",
+      "productMotion": "pan",
+      "overlay": { "source": "offer_or_cta", "layout": "corner_badge", "motion": "scale-in" }
+    }
+  ]
+}

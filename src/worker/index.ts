@@ -7,6 +7,7 @@ import { paths, ensureDirs } from "@/server/paths";
 import { enqueue, releaseAll } from "@/server/jobs/queue";
 import { acquireWorkerLease, heartbeat, releaseWorkerLease, getWorker, WORKER_HEARTBEAT_MS } from "@/server/jobs/worker-lease";
 import { seedMasterBrand } from "@/server/brand/master";
+import { seedTemplates } from "@/server/planning/templates";
 import { renderer } from "@/server/render/browser";
 import { createScheduler } from "./loop";
 import { maintenanceHandler } from "./handlers/maintenance";
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
   }
   await wipeWorkDir();
   await seedMasterBrand();
+  seedTemplates();
   enqueue({ type: "maintenance", idempotencyKey: `maintenance:backup:${new Date().toISOString().slice(0, 10)}`, input: { task: "backup" }, priority: 200 });
 
   let rendererVersion: string | null = null;

@@ -7,7 +7,7 @@ You write a creative brief and PINPO builds an editable storyboard. Scenes are g
 - **Plan (source of truth):** [docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md](docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md)
 - **Verified facts:** [docs/engineering/PHASE_0_FINDINGS.md](docs/engineering/PHASE_0_FINDINGS.md)
 
-> **Status:** under active development. Phase 1 (foundation) is complete. Creating ads arrives in Phases 2–4.
+> **Status:** Phases 0–3 done — one complete ad (Product showcase, any platform, 15–60s) can be briefed, storyboarded, generated (mock or fal.ai), composed with the DemandMesh outro, QA-checked and exported. Next: Phase 4, a real ad reviewed by DemandMesh. See [docs/engineering/IMPLEMENTATION_NOTES.md](docs/engineering/IMPLEMENTATION_NOTES.md).
 
 ## Requirements
 - Node.js 22+

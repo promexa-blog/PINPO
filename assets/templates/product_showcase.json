@@ -16,12 +16,12 @@
       "minLengthS": 15,
       "visualDirection": "Open on the real product with a confident reveal so the viewer knows what this is within two seconds.",
       "productMotion": "push-in",
-      "overlay": { "source": "product_name", "layout": "centered", "motion": "scale-in" }
+      "overlay": { "source": "product_name", "layout": "lower_third", "motion": "fade-up" }
     },
     {
       "role": "hero_detail",
       "label": "Hero detail",
-      "weight": 1.2,
+      "weight": 1.1,
       "sceneType": "ai_from_product",
       "showsProduct": true,
       "minLengthS": 15,
@@ -32,7 +32,7 @@
     {
       "role": "use_moment",
       "label": "Use moment",
-      "weight": 1.4,
+      "weight": 1.2,
       "sceneType": "ai_scene",
       "showsProduct": false,
       "minLengthS": 15,
@@ -65,7 +65,7 @@
     {
       "role": "cta",
       "label": "Call to action",
-      "weight": 0.9,
+      "weight": 1.3,
       "sceneType": "product_original",
       "showsProduct": true,
       "minLengthS": 15,

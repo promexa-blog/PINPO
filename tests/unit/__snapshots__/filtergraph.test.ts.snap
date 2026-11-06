@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compose filtergraph (U6) > chains xfade/concat at timeline offsets with overlays and ducked music 1`] = `
+"[0:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30,format=yuv420p[s0];
+[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[sa0];
+[1:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30,format=yuv420p[s1];
+[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[sa1];
+[2:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30,format=yuv420p[s2];
+[2:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[sa2];
+[3:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30,format=yuv420p[s3];
+[3:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[sa3];
+[s0][s1]xfade=transition=fade:duration=0.4:offset=2.6[v1];
+[sa0][sa1]acrossfade=d=0.4:c1=tri:c2=tri[a1];
+[v1][s2]concat=n=2:v=1:a=0,fps=30[v2];
+[a1][sa2]concat=n=2:v=0:a=1[a2];
+[v2][s3]xfade=transition=fade:duration=0.5:offset=10.1[v3];
+[a2][sa3]acrossfade=d=0.5:c1=tri:c2=tri[a3];
+[4:v]format=rgba,fade=t=in:st=0.1:d=0.4:alpha=1,fade=t=out:st=2.2:d=0.3:alpha=1[ov0];
+[v3][ov0]overlay=x='0':y='38*(1-(1-pow(1-min(1,max(0,(t-0.1)/0.45)),3)))':eval=frame:enable='between(t,0.1,2.5)'[vo0];
+[vo0]fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,trim=duration=13.1,setpts=PTS-STARTPTS[vout];
+[5:a]aresample=48000,aformat=channel_layouts=stereo,volume=-8dB,atrim=duration=13.1,asetpts=PTS-STARTPTS,afade=t=in:d=0.5,afade=t=out:st=11.6:d=1.5[music];
+[a3]asplit=2[clipA][clipSC];
+[music][clipSC]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[ducked];
+[ducked][clipA]amix=inputs=2:duration=first:normalize=0[mixed];
+[mixed]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo,apad,atrim=duration=13.1,asetpts=PTS-STARTPTS[aout]"
+`;

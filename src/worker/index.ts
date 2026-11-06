@@ -11,6 +11,8 @@ import { seedTemplates } from "@/server/planning/templates";
 import { renderer } from "@/server/render/browser";
 import { createScheduler } from "./loop";
 import { maintenanceHandler } from "./handlers/maintenance";
+import { sceneGenerateHandler } from "./handlers/scene-generate";
+import { composeHandler } from "./handlers/compose";
 import { smokeTestRenderer } from "./smoke";
 import type { JobHandler } from "./types";
 
@@ -26,7 +28,7 @@ const log = (msg: string, data?: unknown) => {
   console.log(JSON.stringify({ at: new Date().toISOString(), worker: instanceId.slice(0, 8), msg, ...(data ? { data } : {}) }));
 };
 
-export const handlers: JobHandler[] = [maintenanceHandler];
+const handlers: JobHandler[] = [sceneGenerateHandler, composeHandler, maintenanceHandler];
 
 async function killOrphanBrowser(): Promise<void> {
   const prev = getWorker();
@@ -93,10 +95,12 @@ async function main(): Promise<void> {
   async function shutdown(code = 0): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
+    // Hard stop: leases are released in the DB either way, and expire in 60s if this never runs.
+    setTimeout(() => process.exit(code || 1), 45_000).unref();
     log("shutting down");
     clearInterval(tick);
     clearInterval(beat);
-    await scheduler.stop(30_000);
+    await scheduler.stop(5_000); // jobs resume from their stored stage, so no long grace is needed
     const released = releaseAll(instanceId);
     await renderer.close();
     releaseWorkerLease(instanceId);

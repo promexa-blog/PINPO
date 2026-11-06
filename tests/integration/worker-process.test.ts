@@ -3,9 +3,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { db } from "@/server/db";
 
-const TSX = path.resolve("node_modules/.bin/tsx");
 const startWorker = () =>
-  spawn(TSX, ["src/worker/index.ts"], { env: { ...process.env, FAL_MOCK: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+  spawn(process.execPath, ["--import", "tsx", "src/worker/index.ts"], { env: { ...process.env, FAL_MOCK: "1" }, stdio: ["ignore", "pipe", "pipe"] });
 
 const waitFor = (child: ChildProcess, text: string, ms = 45_000) =>
   new Promise<string>((resolve, reject) => {

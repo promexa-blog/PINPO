@@ -10,5 +10,7 @@ export default defineConfig({
     hookTimeout: 60_000,
     pool: "forks",
     setupFiles: ["tests/setup-env.ts"],
+    // Integration tests run ffmpeg/Chrome workloads; running files serially avoids CPU-contention timeouts.
+    fileParallelism: false,
   },
 });

@@ -71,15 +71,16 @@ export type OffersInput = z.infer<typeof OffersInput>;
 
 export const BriefInput = z.object({
   product: z.object({
-    name: text(80).min(1, "Product name is required"),
+    /** May be empty while drafting; Generate requires it (checkDraft). */
+    name: text(80),
     category: Category,
     /** Appearance lock text: colour, material, size/dimensions, packaging, branding on the product. */
-    appearance: text(600).min(10, "Describe how the product looks (colour, material, size, packaging)"),
+    appearance: text(600),
     productUrl: z.string().url().max(300).optional().nullable(),
     imageAssetIds: z.array(assetId).max(9).default([]),
   }),
   audience: z.object({
-    who: text(200).min(1, "Who is this ad for?"),
+    who: text(200),
     location: text(100).default("Kerala, India"),
   }),
   campaign: z.object({ objective: Objective, platform: PlatformKeySchema }),

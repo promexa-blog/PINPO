@@ -74,7 +74,8 @@ export function createScheduler(owner: string, handlers: JobHandler[], log: (msg
       const all = [...running.values()];
       await Promise.race([Promise.allSettled(all.map((r) => r.promise)), new Promise((r) => setTimeout(r, graceMs))]);
       for (const r of running.values()) r.abort.abort(new Error("worker shutdown"));
-      await Promise.allSettled([...running.values()].map((r) => r.promise));
+      // Bounded: a handler stuck in a non-abortable await must not block shutdown forever.
+      await Promise.race([Promise.allSettled([...running.values()].map((r) => r.promise)), new Promise((r) => setTimeout(r, 5_000))]);
     },
     active: () => running.size,
   };

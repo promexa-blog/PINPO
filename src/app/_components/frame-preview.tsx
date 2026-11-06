@@ -18,6 +18,7 @@ export function FramePreview({
   aiScene,
   width = 180,
   caption,
+  guides = true,
 }: {
   platform: PlatformKey;
   colors: BrandColors;
@@ -27,8 +28,10 @@ export function FramePreview({
   productSrc: string | null;
   aiScene: boolean;
   width?: number;
-  /** Compact caption (filmstrip); omit for the full caption. */
-  caption?: string;
+  /** Compact caption (filmstrip); null hides it; omit for the full caption. */
+  caption?: string | null;
+  /** Dashed safe-area guide (off in the playback preview). */
+  guides?: boolean;
 }) {
   const p = PLATFORMS[platform];
   const scale = width / p.width;
@@ -45,10 +48,10 @@ export function FramePreview({
             <img src={productSrc} alt="" style={{ position: "absolute", left: "50%", top: "47%", transform: "translate(-50%,-50%)", maxWidth: "75%", maxHeight: "55%", objectFit: "contain" }} />
           ) : null}
           {!placeholder ? <OverlayLayer frame={frame} colors={colors} lang={lang} layout={layout} lines={lines} /> : null}
-          <div style={{ position: "absolute", left: p.width * p.safe.left, right: p.width * p.safe.right, top: p.height * p.safe.top, bottom: p.height * p.safe.bottom, outline: `${Math.max(2, 1.5 / scale)}px dashed color-mix(in oklch, var(--accent) 60%, transparent)` }} />
+          {guides ? <div style={{ position: "absolute", left: p.width * p.safe.left, right: p.width * p.safe.right, top: p.height * p.safe.top, bottom: p.height * p.safe.bottom, outline: `${Math.max(2, 1.5 / scale)}px dashed color-mix(in oklch, var(--accent) 60%, transparent)` }} /> : null}
         </div>
       </div>
-      {caption !== undefined ? (
+      {caption === null ? null : caption !== undefined ? (
         <figcaption className="tabular mt-1 text-center text-[11px] font-semibold text-ink-3">{caption}</figcaption>
       ) : (
         <figcaption className="mt-1.5 text-[11px] leading-snug text-ink-3">{placeholder ? "Text shows once placeholders are filled" : "Dashed line: text-safe area"}</figcaption>

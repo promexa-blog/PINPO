@@ -12,8 +12,9 @@ import { FramePreview } from "./frame-preview";
 import { AspectGlyph } from "./frame";
 import { Button, Checkbox, Field, Input, Notice, Section, Select, Status, Textarea, api, usd } from "./ui";
 import { Upload } from "./upload";
+import { StoryboardTimeline } from "./storyboard-timeline";
 import { useFeedback } from "./feedback";
-import { IconAlert, IconArrowLeft, IconArrowRight, IconCheck, IconFilm, IconImage, IconMusic, IconPlay, IconPlus, IconRefresh, IconSliders, IconText, IconTrash, IconX } from "./icons";
+import { IconAlert, IconArrowDown, IconArrowLeft, IconArrowUp, IconArrowRight, IconCheck, IconFilm, IconImage, IconMusic, IconPlay, IconPlus, IconRefresh, IconSliders, IconText, IconTrash, IconX } from "./icons";
 
 type SaveState = "saved" | "saving" | "dirty" | "conflict" | "error";
 interface Draft {
@@ -179,6 +180,16 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
   const lang = finishing.outroLang;
   const claims = brief.claims;
   const colors = view.brandColors as unknown as BrandColors;
+  /** Reorders scenes; voiceovers stay attached to the scene they were on. */
+  const moveScene = (from: number, to: number) => {
+    const n = draft.scenes.length;
+    if (to < 0 || to >= n || from === to) return;
+    const order = draft.scenes.map((_, k) => k);
+    const [m] = order.splice(from, 1);
+    order.splice(to, 0, m!);
+    update({ scenes: order.map((k) => draft.scenes[k]!), voiceovers: draft.voiceovers.map((vo) => ({ ...vo, scenePosition: order.indexOf(vo.scenePosition) })) });
+    toast(`Moved “${draft.scenes[from]!.label}” to position ${to + 1}.`, "info");
+  };
   const sceneUpdate = (i: number, patch: Partial<SceneEdit>) => update({ scenes: draft.scenes.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const hasPlaceholders = draft.scenes.some((s) => (s.overlay.byLang[lang] ?? []).some((l) => l.kind === "placeholder"));
   const done: Record<StepKey, boolean> = {
@@ -597,16 +608,20 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                 </div>
                 {draft.scenes.length ? (
                   <>
-                    {/* Filmstrip: every scene at its true shape */}
-                    <ol aria-label="Scenes overview" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                      {draft.scenes.map((s, i) => (
-                        <li key={i} className="shrink-0">
-                          <a href={`#scene-${i + 1}`} className="block rounded-md">
-                            <FramePreview platform={draft.platform} colors={colors} lang={lang} layout={s.overlay.layout} lines={s.overlay.byLang[lang] ?? []} productSrc={s.productAssetId ? `/api/assets/${s.productAssetId}` : null} aiScene={s.sceneType !== "product_original"} width={platform.aspect === "16:9" ? 132 : 76} caption={`${i + 1}`} />
-                          </a>
-                        </li>
-                      ))}
-                    </ol>
+                    <StoryboardTimeline
+                      scenes={draft.scenes}
+                      platform={draft.platform}
+                      colors={colors}
+                      lang={lang}
+                      brand={{ name: view.brand.name, website: view.brand.website, tagline: view.brand.tagline, logo: view.brand.logo }}
+                      cta={brief.cta[lang] ?? ""}
+                      onMove={moveScene}
+                      onJump={(i) => {
+                        const el = document.getElementById(`scene-${i + 1}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        el?.querySelector<HTMLElement>("input, select, textarea")?.focus({ preventScroll: true });
+                      }}
+                    />
                     <ol className="grid gap-4">
                       {draft.scenes.map((s, i) => {
                         const lines = s.overlay.byLang[lang] ?? [];
@@ -620,6 +635,14 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                                     <span className="tabular text-ink-3">{i + 1}</span> {s.label}
                                   </h3>
                                   <Status tone={SCENE_TYPE[s.sceneType].tone}>{SCENE_TYPE[s.sceneType].label}</Status>
+                                  <span className="ml-auto flex gap-1">
+                                    <Button variant="quiet" size="sm" aria-label={`Move scene ${i + 1} earlier`} disabled={i === 0} onClick={() => moveScene(i, i - 1)}>
+                                      <IconArrowUp size={15} />
+                                    </Button>
+                                    <Button variant="quiet" size="sm" aria-label={`Move scene ${i + 1} later`} disabled={i === draft.scenes.length - 1} onClick={() => moveScene(i, i + 1)}>
+                                      <IconArrowDown size={15} />
+                                    </Button>
+                                  </span>
                                 </div>
                                 <p className="mb-4 text-[13px] text-ink-2">{s.visualDirection}</p>
                                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

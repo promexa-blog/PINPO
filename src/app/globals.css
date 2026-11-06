@@ -152,6 +152,7 @@ p { text-wrap: pretty; }
 .toast-enter { animation: toast-in 220ms var(--ease-out) both; }
 .menu-enter { animation: rise-in 180ms var(--ease-out) both; }
 .saving-dot { animation: breathe 1s ease-in-out infinite; }
+.frame-fade { animation: fade-in 280ms ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

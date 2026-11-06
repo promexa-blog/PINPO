@@ -8,12 +8,12 @@ import { getMasterBrand } from "@/server/brand/master";
 import { renderOverlay, renderOutro, frameFor, officialLogo, brandColors, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
 import { offerLine, formatInr } from "@/server/brief/offers";
 import { groupBuyLines } from "@/server/planning/storyboard";
-import { normalizeClip, outroClip, thumbnail, PUSH_IN_ZOOM } from "@/server/media/clips";
+import { normalizeClip, outroClip, thumbnail, extractFrame, PUSH_IN_ZOOM } from "@/server/media/clips";
 import { buildComposeGraph, type XfadeKind } from "@/server/media/filtergraph";
 import { ffmpeg } from "@/server/media/run";
 import { probe } from "@/server/media/probe";
 import { validateFinal, loudness } from "@/server/media/validate";
-import { compareProductRegion, PRODUCT_THRESHOLDS } from "@/server/media/product-check";
+import { compareProductRegion, PRODUCT_THRESHOLDS, ssimOf } from "@/server/media/product-check";
 import { absolutePath, getAsset, putFile } from "@/server/storage/assets";
 import { isDiskFullError } from "@/server/storage/disk";
 import { getBrief, getScenes, requireVersion, settingsOf, finishingOf, getVoiceovers } from "@/server/db/repos/versions";
@@ -21,6 +21,8 @@ import { draftScenes, timelineFor, brandLines } from "@/server/planning/draft";
 import { OUTRO_S } from "@/server/planning/storyboard";
 import { complianceItems, type QaItem } from "@/server/qa/checks/compliance";
 import { writeReport, refreshQaStatus } from "@/server/qa/reports";
+import { rightsItems } from "@/server/qa/checks/rights";
+import { usedAssets } from "@/server/qa/used-assets";
 import { indiaToday } from "@/server/brief/offers";
 import { getModel } from "@/server/models/registry";
 import { safeBox } from "@/lib/brand-layout/tokens";
@@ -228,8 +230,10 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   await thumbnail(absolutePath(final), Math.min(1.5, tl.totalS / 3), thumbFile);
   const thumb = await putFile(thumbFile, { kind: "image", mime: "image/jpeg", ext: "jpg", source: "derived", width: 480, provenance: { sourceType: "rendered", commercialUse: "yes", license: "Proprietary – DemandMesh" } });
 
+  // Logo/outro accuracy: the final's outro frame must match the expected official render (plan §9).
+  const outroMatch = await outroFrameSsim(absolutePath(final), outroPng.file, tl.totalS - 0.15, W, H, dir);
   const technicalItems: QaItem[] = tech.checks.map((c) => ({ check: `technical_${c.key}`, method: "automated", status: c.status, message: c.message, evidence: c.value }));
-  const creative = await creativeItems({ v, scenes, rows, brief, brand, lang, overlays, timeline: tl, music, dir, ctaText, settingsModel: settings.modelId, outroType: finishing.outroType });
+  const creative = await creativeItems({ v, scenes, rows, brief, brand, lang, overlays, timeline: tl, music, dir, ctaText, settingsModel: settings.modelId, outroType: finishing.outroType, outroSsim: outroMatch });
 
   tx(() => {
     writeReport(versionId, "technical", technicalItems);
@@ -256,6 +260,7 @@ async function creativeItems(a: {
   ctaText: string;
   settingsModel: string;
   outroType: "standard" | "promotional" | "product" | "minimal";
+  outroSsim: number;
 }): Promise<QaItem[]> {
   const items: QaItem[] = [];
   const { brand, v } = a;
@@ -264,7 +269,13 @@ async function creativeItems(a: {
   // Logo accuracy: pinned hash verified at render; low-res temporary logo is a warning.
   const logo = officialLogo(brand);
   const logoRec = brand.logos.find((l) => l.variant === "horizontal")!;
-  items.push({ check: "logo_accuracy", method: "automated", status: "pass", message: `Official logo used (sha256 ${logo.asset.sha256.slice(0, 12)}…, pinned).` });
+  items.push({
+    check: "logo_accuracy",
+    method: "automated",
+    status: a.outroSsim >= 0.97 ? "pass" : "fail",
+    message: `Official logo used (sha256 ${logo.asset.sha256.slice(0, 12)}…, pinned); outro frame matches the expected render (SSIM ${a.outroSsim.toFixed(3)}).`,
+    evidence: { ssim: a.outroSsim },
+  });
   if (logoRec.temporary || logo.width * logo.maxScale < safeBox(frame).width * 0.45) {
     items.push({ check: "logo_accuracy", method: "automated", status: "warn", message: `Logo is the temporary ${logo.width}×${logo.height} file — it can't be shown larger than ${Math.round(logo.width * logo.maxScale)} px. Replace it with the official high-res logo.` });
   }
@@ -339,20 +350,8 @@ async function creativeItems(a: {
   // Compliance over the actual on-screen text.
   items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas, brandLines: brandLines() }));
 
-  // Rights (basic gate; full provenance checks come with Phase 7).
-  const voiceovers = getVoiceovers(a.v.id).filter((s) => !s.muted);
-  const used = [...a.rows.map((r) => getAsset(r.clip_asset_id ?? "")), ...a.scenes.map((s) => (s.productAssetId ? getAsset(s.productAssetId) : undefined)), a.music, ...voiceovers.map((s) => getAsset(s.assetId))].filter((x): x is NonNullable<typeof x> => !!x);
-  // Voice talent consent (plan §8a, PV3).
-  const noConsent = voiceovers.filter((s) => !s.talentConsent);
-  if (noConsent.length) items.push({ check: "asset_rights", method: "automated", status: "fail", message: `${noConsent.length} voiceover(s) have no recorded consent from the voice artist for commercial ad use.` });
-  const bad = used.filter((u) => u.commercial_use === "no");
-  const unknown = used.filter((u) => u.commercial_use === "unknown");
-  items.push({
-    check: "asset_rights",
-    method: "automated",
-    status: bad.length ? "fail" : unknown.length ? "needs_review" : "pass",
-    message: bad.length ? `${bad.length} asset(s) can't be used commercially.` : unknown.length ? `${unknown.length} asset(s) have unknown commercial-use rights — confirm before export.` : "All assets used have commercial-use permission.",
-  });
+  // Rights gate (plan §8a): commercial use, licence expiry, voice consent, required credits.
+  items.push(...rightsItems(usedAssets(a.v.id)));
   return items;
 }
 
@@ -371,4 +370,16 @@ function luminance(hex: string): number {
 export function contrastRatio(a: string, b: string): number {
   const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (l1! + 0.05) / (l2! + 0.05);
+}
+
+/** SSIM of the final's outro hold frame vs the rendered outro PNG at the reveal's end zoom (1.02). */
+async function outroFrameSsim(finalFile: string, outroPng: string, atS: number, W: number, H: number, dir: string): Promise<number> {
+  const sharp = (await import("sharp")).default;
+  const got = path.join(dir, "outro-hold.png");
+  const exp = path.join(dir, "outro-expected.png");
+  await extractFrame(finalFile, atS, got);
+  const zw = Math.round(W * 1.02);
+  const zh = Math.round(H * 1.02);
+  await sharp(outroPng).resize(zw, zh, { kernel: "lanczos3" }).extract({ left: Math.round((zw - W) / 2), top: Math.round((zh - H) / 2), width: W, height: H }).png().toFile(exp);
+  return ssimOf(exp, got);
 }

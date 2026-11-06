@@ -57,7 +57,8 @@ export const SceneEdit = z.object({
   overlay: z.object({
     layout: z.enum(["lower_third", "centered", "side_panel", "corner_badge", "split_headline"]),
     motion: z.enum(["fade-up", "slide-in", "scale-in", "logo-reveal"]),
-    byLang: z.record(Lang, z.array(OverlayLineSchema).max(8)),
+    // zod 4: z.record(enum) requires every key; ads usually have one language.
+    byLang: z.partialRecord(Lang, z.array(OverlayLineSchema).max(8)),
   }),
   productAssetId: z.string().regex(/^ast_[a-f0-9]{20}$/).nullable(),
 });

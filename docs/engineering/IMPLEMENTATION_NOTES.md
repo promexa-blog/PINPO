@@ -61,3 +61,13 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
   - The plan had waveform peaks computed by the worker and served by `GET /api/assets/[id]/peaks`. The editor instead decodes the audio file in the browser (Web Audio API) and draws peaks itself. This avoids a worker job and an extra route for the same result, and the server stays free of ffmpeg work for previews.
   - Audio uploads are checked with **ffprobe inside the Next upload route** (fast, bounded: ≤20 MB, ≤10 min). The rule "Next never runs ffmpeg" holds for generation and composition.
 - **Rights:** a voiceover without recorded voice-artist consent makes QA `asset_rights` **fail**, which blocks export (PV3). The draft check warns about it before you generate.
+
+## Phase 7 — full QA, compliance and rights
+- **Rights gate** (`qa/checks/rights.ts`, used by compose):
+  - **fail:** commercial use "no", licence expired, voiceover without voice-artist consent, CC BY licence without a credit line
+  - **needs review:** commercial use unknown
+  - The gate covers clips, product photos (including reference images), music, voiceovers, the logo and the fonts.
+- **Credits:** `GET /api/versions/[vid]/credits` produces `credits.txt` from attributions and third-party licences. The export panel links to it.
+- **Logo/outro accuracy:** the final's outro hold frame is compared with the expected official render, zoomed to 1.02 to match the end of the logo reveal. It must reach SSIM ≥ 0.97 on the full frame, and the measured value is stored as QA evidence. *Deviation:* the plan says logo-region SSIM ≥ 0.98. Full-frame is used because the logo's exact box isn't exported from the layout. The pinned-hash check still guarantees the right file.
+- **Colour compliance** is enforced at render input: every brand-layer colour must be a token. The plan's extra check, sampling overlay pixels with ΔE ≤ 3, is **not implemented**. It adds little, because overlays are rendered from tokens onto solid panels.
+- **Bug found and fixed:** in Zod 4, `z.record(LangEnum, …)` requires **all** keys, so the editor would have rejected scenes with overlays in only one language. It is now `z.partialRecord`, with a regression test.

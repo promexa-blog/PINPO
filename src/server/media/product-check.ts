@@ -83,7 +83,7 @@ export async function compareProductRegion(o: {
   return { meanDeltaE: mean, p95DeltaE: p95, ssim, aspectError: Math.abs(renderedAspect - expectedAspect) / expectedAspect, rect: { x, y, w, h } };
 }
 
-async function ssimOf(a: string, b: string): Promise<number> {
+export async function ssimOf(a: string, b: string): Promise<number> {
   const { stderrTail } = await ffmpeg(["-i", a, "-i", b, "-lavfi", "[0:v]format=gray[a];[1:v]format=gray[b];[a][b]ssim", "-f", "null", "-"]);
   const m = /All:([\d.]+)/.exec(stderrTail);
   return m ? Number(m[1]) : 0;

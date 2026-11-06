@@ -192,6 +192,9 @@ export function Overview({ versionId }: { versionId: string }) {
             ) : (
               <Button disabled>Download MP4</Button>
             )}
+            <a href={`/api/versions/${versionId}/credits?download=1`} className="text-sm font-semibold underline-offset-4 hover:underline">
+              Download credits.txt
+            </a>
           </div>
         ) : null}
         {error ? (

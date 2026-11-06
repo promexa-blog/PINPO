@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/server/db";
 import { Overview } from "../../_components/overview";
 import { AdHeading } from "../../_components/ad-heading";
+import { versionView } from "@/server/views";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Ad" };
@@ -17,7 +18,7 @@ export default async function AdPage({ params }: { params: Promise<{ adId: strin
   return (
     <main id="main" className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
       <AdHeading name={ad.name} brandName={ad.brand_name} eyebrow={`Version ${v.number}`} />
-      <Overview key={ad.current_version_id} versionId={ad.current_version_id} adId={ad.id} />
+      <Overview key={ad.current_version_id} versionId={ad.current_version_id} adId={ad.id} initial={versionView(ad.current_version_id)} />
     </main>
   );
 }

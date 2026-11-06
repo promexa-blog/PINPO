@@ -43,13 +43,15 @@ type QaItem = VersionView["qa"][number];
 const qaTone = (q: QaItem): Tone => (q.status === "pass" ? "ok" : q.status === "fail" ? "bad" : q.status === "needs_review" ? (q.acknowledgedAt ? "ok" : "warn") : "neutral");
 const qaLabel = (q: QaItem) => (q.status === "pass" ? "Pass" : q.status === "fail" ? "Fail" : q.status === "needs_review" ? (q.acknowledgedAt ? "Reviewed" : "Review") : "Note");
 
-export function Overview({ versionId, adId }: { versionId: string; adId: string }) {
+/** `initial` is rendered on the server so the page paints its final layout at once (no skeleton swap). */
+export function Overview({ versionId, adId, initial }: { versionId: string; adId: string; initial?: { view: VersionView; etag: string } }) {
   const router = useRouter();
   const { confirm, prompt, toast } = useFeedback();
-  const [view, setView] = useState<VersionView | null>(null);
+  const [view, setView] = useState<VersionView | null>(initial?.view ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const etag = useRef<string | null>(null);
+  const etag = useRef<string | null>(initial?.etag ?? null);
+  const serverRendered = useRef(!!initial);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/versions/${versionId}`, { headers: etag.current ? { "If-None-Match": etag.current } : {} });
@@ -60,6 +62,7 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
   }, [versionId]);
 
   useEffect(() => {
+    if (serverRendered.current) return; // server-rendered: polling (below) keeps it fresh
     load().catch((e) => setError((e as Error).message));
   }, [load]);
 

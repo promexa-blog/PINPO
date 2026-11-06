@@ -142,24 +142,49 @@ export function Editor({ versionId, adId, title }: { versionId: string; adId: st
     heading.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [step]);
 
-  const flush = useCallback(async () => {
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  const flushRef = useRef<() => Promise<boolean>>(async () => true);
+  /**
+   * Saves pending edits. One save at a time: a later save waits for the current one and then
+   * sends the newest revision (no false "changed in another tab"). A failed save keeps the edits
+   * and retries; callers that act on the saved draft check the result.
+   */
+  const flush = useCallback(async (): Promise<boolean> => {
+    while (inFlight.current) await inFlight.current;
     const body = pending.current;
-    if (!body) return;
-    // Unfinished benefit rows (empty text) stay local until they have text.
-    if (body.brief) body.brief = { ...body.brief, claims: body.brief.claims.filter((c) => c.text.trim()) };
+    if (!body) return true;
     pending.current = null;
+    // Unfinished benefit rows (empty text) stay local until they have text.
+    const send = body.brief ? { ...body, brief: { ...body.brief, claims: body.brief.claims.filter((c) => c.text.trim()) } } : body;
     setSave("saving");
-    try {
-      const r = await api<{ revision: number }>(`/api/versions/${versionId}`, { method: "PATCH", body: JSON.stringify({ revision: revision.current, ...body }) });
-      revision.current = r.revision;
-      setSave(pending.current ? "dirty" : "saved");
-      setView(await api<VersionView>(`/api/versions/${versionId}`));
-    } catch (e) {
-      const status = (e as { status?: number }).status;
-      setSave(status === 409 ? "conflict" : "error");
-      setError((e as Error).message);
-    }
+    const run = (async () => {
+      try {
+        const r = await api<{ revision: number }>(`/api/versions/${versionId}`, { method: "PATCH", body: JSON.stringify({ revision: revision.current, ...send }) });
+        revision.current = r.revision;
+        setSave(pending.current ? "dirty" : "saved");
+        setView(await api<VersionView>(`/api/versions/${versionId}`));
+        return true;
+      } catch (e) {
+        // Keep the unsaved edits; anything typed since is newer and wins.
+        pending.current = { ...body, ...(pending.current ?? {}) };
+        const status = (e as { status?: number }).status;
+        setSave(status === 409 ? "conflict" : "error");
+        setError((e as Error).message);
+        if (status !== 409) {
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => void flushRef.current(), 5000);
+        }
+        return false;
+      } finally {
+        inFlight.current = null;
+      }
+    })();
+    inFlight.current = run;
+    return run;
   }, [versionId]);
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
 
   // Autosave (plan §13): debounced 800 ms, revision-checked.
   const update = (patch: Partial<Draft>) => {
@@ -236,7 +261,7 @@ export function Editor({ versionId, adId, title }: { versionId: string; adId: st
 
   async function buildStoryboard(confirm = false) {
     if (timer.current) clearTimeout(timer.current);
-    await flush();
+    if (!(await flush())) return;
     setBusy("storyboard");
     setError(null);
     try {
@@ -258,7 +283,8 @@ export function Editor({ versionId, adId, title }: { versionId: string; adId: st
 
   async function generate() {
     if (timer.current) clearTimeout(timer.current);
-    await flush();
+    // Never generate an older draft than what's on screen.
+    if (!(await flush())) return;
     setBusy("generate");
     setError(null);
     try {
@@ -359,7 +385,7 @@ export function Editor({ versionId, adId, title }: { versionId: string; adId: st
             <p className="mt-1 max-w-prose text-sm text-ink-2">{current.intro}</p>
           </div>
 
-          <div key={`${step}-body`} className="step-enter grid gap-5">
+          <div key={`${step}-body`} className="step-enter grid grid-cols-[minmax(0,1fr)] gap-5">
             {step === "product" ? (
               <>
                 <Section id="product" title="Basics">

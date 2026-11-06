@@ -110,7 +110,7 @@
   --color-bad-soft: var(--bad-soft);
   --color-frame: var(--frame-bg);
   --shadow-lift: var(--shadow);
-  --font-sans: "PINPO Separators", var(--font-ui), var(--font-pinpo), "PINPO Malayalam", "PINPO Devanagari", system-ui, sans-serif;
+  --font-sans: "PINPO Separators", var(--font-ui), "PINPO Rupee", "PINPO Malayalam", "PINPO Devanagari", system-ui, sans-serif;
 }
 
 html {
@@ -162,9 +162,16 @@ p { text-wrap: pretty; }
   :focus-visible { outline-color: Highlight; }
 }
 
-/* Brand-layer fonts for the WYSIWYG frame previews (same faces the renderer uses). */
-@font-face { font-family: "PINPO Sans"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
-@font-face { font-family: "PINPO Malayalam"; src: url("/api/fonts/NotoSansMalayalam.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
-@font-face { font-family: "PINPO Devanagari"; src: url("/api/fonts/NotoSansDevanagari.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
-/* Instrument Sans kerns the space around "·" very tightly; take just the separator glyphs from Noto. */
-@font-face { font-family: "PINPO Separators"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); unicode-range: U+00B7, U+2022; font-weight: 100 900; font-display: swap; }
+/*
+ * Web fonts (woff2, generated from the renderer's TTFs in assets/fonts by subsetting). Each face
+ * declares the characters it covers, so the browser downloads it only when a page shows them.
+ * "PINPO Sans" is the Latin subset of the face the video renderer uses: the WYSIWYG previews use it
+ * so they match the final render. The studio UI itself uses Instrument Sans (layout.tsx).
+ */
+@font-face { font-family: "PINPO Sans"; src: url("/api/fonts/NotoSans-Latin.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0020-007E, U+00A0-024F, U+0259, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-214F, U+2190-21FF, U+2212, U+25CC; }
+@font-face { font-family: "PINPO Malayalam"; src: url("/api/fonts/NotoSansMalayalam.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965; }
+@font-face { font-family: "PINPO Devanagari"; src: url("/api/fonts/NotoSansDevanagari.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0900-097F, U+1CD0-1CFF, U+A8E0-A8FF, U+200C-200D, U+25CC; }
+/* Instrument Sans lacks ₹: a 2 KB face supplies it. */
+@font-face { font-family: "PINPO Rupee"; src: url("/api/fonts/NotoSans-Rupee.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+20B9; }
+/* Instrument Sans kerns the space around "·" very tightly; take just the separator glyphs from Noto (2 KB). */
+@font-face { font-family: "PINPO Separators"; src: url("/api/fonts/NotoSans-Separators.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+00B7, U+2022; }

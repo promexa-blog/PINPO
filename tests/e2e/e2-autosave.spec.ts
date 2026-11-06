@@ -17,4 +17,9 @@ test("autosaves the draft and survives a reload; second tab gets a conflict", as
   await expect(page.getByText("All changes saved").filter({ visible: true })).toBeVisible();
   await tab2.getByLabel("Product name").fill("Something else");
   await expect(tab2.getByText(/Changed in another tab/).filter({ visible: true })).toBeVisible();
+
+  // The first tab's save is what persisted; the conflicting edit did not overwrite it.
+  await page.reload();
+  await goToStep(page, "Product");
+  await expect(page.getByLabel("Product name")).toHaveValue("Steel Lunch Box Pro");
 });

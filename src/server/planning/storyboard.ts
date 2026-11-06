@@ -225,6 +225,7 @@ function buildPrompt(r: TemplateSceneDef, c: CreativeControls, brief: BriefInput
     .replaceAll("{setting}", c.setting)
     .replaceAll("{toneMood}", TONE_MOOD[brief.creative.tone])
     .replaceAll("{audienceWho}", brief.audience.who)
+    .replaceAll("{audienceLocation}", brief.audience.location?.trim() || "their town")
     .replaceAll("{categoryNoun}", CATEGORY_NOUN[brief.product.category]);
   const parts = [filled];
   if (r.showsProduct && r.sceneType === "ai_reference" && model.references) {

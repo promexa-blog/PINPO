@@ -48,9 +48,9 @@ const LIGHT_BY_STYLE: Record<BriefInput["creative"]["style"], Lighting> = {
 };
 
 const SETTING_BY_CATEGORY: Record<Category, { product: string; scene: string }> = {
-  fashion_accessories: { product: "a clean neutral surface with soft fabric texture", scene: "a bright street in a Kerala town" },
-  health_personal_care: { product: "a tidy bathroom shelf with soft towels", scene: "a calm, sunlit home in Kerala" },
-  home_kitchen: { product: "a modern Kerala kitchen counter", scene: "a busy, warm family kitchen in Kerala" },
+  fashion_accessories: { product: "a clean neutral surface with soft fabric texture", scene: "a bright town street{in}" },
+  health_personal_care: { product: "a tidy bathroom shelf with soft towels", scene: "a calm, sunlit home{in}" },
+  home_kitchen: { product: "a modern kitchen counter", scene: "a busy, warm family kitchen{in}" },
   office_stationery: { product: "a tidy wooden office desk", scene: "a bright small office or study corner" },
 };
 
@@ -106,7 +106,11 @@ export function defaultControls(args: {
 }): CreativeControls {
   const { brief } = args;
   const cam = CAMERA_BY_TONE[brief.creative.tone];
-  const settings = SETTING_BY_CATEGORY[brief.product.category];
+  // Settings take the audience's place (first part of "Kochi, Kerala, India" → " in Kochi").
+  const place = brief.audience.location?.split(",")[0]?.trim();
+  const at = (s: string) => s.replace("{in}", place ? ` in ${place}` : "");
+  const base = SETTING_BY_CATEGORY[brief.product.category];
+  const settings = { product: at(base.product), scene: at(base.scene) };
   const studio = brief.creative.style === "studio" || brief.creative.style === "minimal";
   let layout = args.layout;
   if (layout === "side_panel" && args.platform !== "youtube_instream") layout = "lower_third";

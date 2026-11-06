@@ -294,8 +294,11 @@ export function listAds() {
   return db()
     .prepare(
       `SELECT a.id, a.name, a.updated_at, v.id AS version_id, v.number, v.status, v.qa_status, v.platform, v.settings_json, v.thumb_asset_id, v.final_asset_id,
-              (SELECT COUNT(*) FROM ad_versions vv WHERE vv.ad_id = a.id) AS version_count
+              (SELECT COUNT(*) FROM ad_versions vv WHERE vv.ad_id = a.id) AS version_count,
+              a.brand_kit_id, k.name AS brand_name, json_extract(b.product_json, '$.imageAssetIds[0]') AS product_asset_id
        FROM ads a JOIN ad_versions v ON v.id = a.current_version_id
+       LEFT JOIN brand_kits k ON k.id = a.brand_kit_id
+       LEFT JOIN briefs b ON b.version_id = v.id
        WHERE a.deleted_at IS NULL ORDER BY a.updated_at DESC`,
     )
     .all() as {
@@ -311,5 +314,8 @@ export function listAds() {
     thumb_asset_id: string | null;
     final_asset_id: string | null;
     version_count: number;
+    brand_kit_id: string;
+    brand_name: string | null;
+    product_asset_id: string | null;
   }[];
 }

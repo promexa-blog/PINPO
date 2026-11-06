@@ -40,15 +40,15 @@ export function Waveform({ assetId, bars = 120, height = 40, label }: { assetId:
     };
   }, [assetId, bars]);
 
-  if (!peaks) return <div className="h-10 animate-pulse rounded bg-dm-surface" aria-label={`Loading waveform: ${label}`} />;
-  if (!peaks.length) return <p className="text-xs text-dm-secondary">Waveform unavailable</p>;
+  if (!peaks) return <div className="h-10 animate-pulse rounded bg-panel-2" aria-label={`Loading waveform: ${label}`} />;
+  if (!peaks.length) return <p className="text-xs text-ink-3">Waveform unavailable</p>;
   const w = 2;
   const gap = 1;
   return (
     <svg role="img" aria-label={`Waveform: ${label}`} viewBox={`0 0 ${peaks.length * (w + gap)} ${height}`} preserveAspectRatio="none" className="h-10 w-full">
       {peaks.map((v, i) => {
         const h = Math.max(1, v * height);
-        return <rect key={i} x={i * (w + gap)} y={(height - h) / 2} width={w} height={h} rx={1} fill="#526979" />;
+        return <rect key={i} x={i * (w + gap)} y={(height - h) / 2} width={w} height={h} rx={1} className="fill-accent" />;
       })}
     </svg>
   );

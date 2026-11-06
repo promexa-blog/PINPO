@@ -1,27 +1,151 @@
 @import "tailwindcss";
 
-/* DemandMesh brand tokens (plan §3 / §13). Studio chrome uses only these. */
-@theme {
-  --color-dm-primary: #0C1C28;
-  --color-dm-hover: #162B3A;
-  --color-dm-secondary: #526979;
-  --color-dm-secondary-light: #E8EEF1;
-  --color-dm-bg: #FFFFFF;
-  --color-dm-surface: #F7F9FA;
-  --color-dm-border: #E1E7EA;
-  --font-sans: var(--font-pinpo), system-ui, sans-serif;
+/*
+ * PINPO studio tokens. The studio is a dark editing room by default so footage reads true;
+ * a light theme follows the system or the header toggle (cookie → data-theme on <html>).
+ * Customer brand colours never appear in the chrome — only inside ad frames.
+ * Accent: marigold. It marks primary actions, current selection and focus — nothing else.
+ */
+:root {
+  color-scheme: dark;
+  --canvas: oklch(0.165 0.008 255);
+  --panel: oklch(0.205 0.009 255);
+  --panel-2: oklch(0.24 0.01 255);
+  --sunken: oklch(0.135 0.007 255);
+  --line: oklch(0.305 0.011 255);
+  --line-strong: oklch(0.42 0.013 255);
+  --ink: oklch(0.955 0.004 255);
+  --ink-2: oklch(0.78 0.01 255);
+  --ink-3: oklch(0.68 0.012 255);
+  --accent: oklch(0.82 0.15 78);
+  --accent-hover: oklch(0.87 0.135 84);
+  --accent-ink: oklch(0.22 0.03 70);
+  --accent-text: oklch(0.84 0.14 80);
+  --accent-soft: oklch(0.82 0.15 78 / 0.14);
+  --ok: oklch(0.8 0.14 155);
+  --ok-soft: oklch(0.8 0.14 155 / 0.14);
+  --warn: oklch(0.8 0.13 55);
+  --warn-soft: oklch(0.8 0.13 55 / 0.15);
+  --bad: oklch(0.72 0.17 25);
+  --bad-soft: oklch(0.72 0.17 25 / 0.16);
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px oklch(0 0 0 / 0.28);
+  --frame-bg: oklch(0.11 0.006 255);
 }
 
-html { background: var(--color-dm-bg); color: var(--color-dm-primary); }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: oklch(0.972 0.003 255);
+  --panel: oklch(0.995 0.0015 255);
+  --panel-2: oklch(0.948 0.005 255);
+  --sunken: oklch(0.93 0.006 255);
+  --line: oklch(0.885 0.007 255);
+  --line-strong: oklch(0.76 0.012 255);
+  --ink: oklch(0.21 0.014 255);
+  --ink-2: oklch(0.43 0.014 255);
+  --ink-3: oklch(0.5 0.014 255);
+  --accent: oklch(0.8 0.15 78);
+  --accent-hover: oklch(0.76 0.15 74);
+  --accent-ink: oklch(0.22 0.03 70);
+  --accent-text: oklch(0.47 0.12 68);
+  --accent-soft: oklch(0.8 0.15 78 / 0.2);
+  --ok: oklch(0.5 0.13 155);
+  --ok-soft: oklch(0.6 0.13 155 / 0.14);
+  --warn: oklch(0.52 0.13 50);
+  --warn-soft: oklch(0.7 0.14 55 / 0.16);
+  --bad: oklch(0.52 0.18 27);
+  --bad-soft: oklch(0.6 0.18 27 / 0.12);
+  --shadow: 0 1px 2px oklch(0.2 0.02 255 / 0.06), 0 8px 24px oklch(0.2 0.02 255 / 0.08);
+  --frame-bg: oklch(0.87 0.008 255);
+}
 
-:focus-visible { outline: 2px solid var(--color-dm-primary); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --canvas: oklch(0.972 0.003 255);
+    --panel: oklch(0.995 0.0015 255);
+    --panel-2: oklch(0.948 0.005 255);
+    --sunken: oklch(0.93 0.006 255);
+    --line: oklch(0.885 0.007 255);
+    --line-strong: oklch(0.76 0.012 255);
+    --ink: oklch(0.21 0.014 255);
+    --ink-2: oklch(0.43 0.014 255);
+    --ink-3: oklch(0.5 0.014 255);
+    --accent: oklch(0.8 0.15 78);
+    --accent-hover: oklch(0.76 0.15 74);
+    --accent-ink: oklch(0.22 0.03 70);
+    --accent-text: oklch(0.47 0.12 68);
+    --accent-soft: oklch(0.8 0.15 78 / 0.2);
+    --ok: oklch(0.5 0.13 155);
+    --ok-soft: oklch(0.6 0.13 155 / 0.14);
+    --warn: oklch(0.52 0.13 50);
+    --warn-soft: oklch(0.7 0.14 55 / 0.16);
+    --bad: oklch(0.52 0.18 27);
+    --bad-soft: oklch(0.6 0.18 27 / 0.12);
+    --shadow: 0 1px 2px oklch(0.2 0.02 255 / 0.06), 0 8px 24px oklch(0.2 0.02 255 / 0.08);
+    --frame-bg: oklch(0.87 0.008 255);
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-frame: var(--frame-bg);
+  --shadow-lift: var(--shadow);
+  --font-sans: var(--font-pinpo), system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  scroll-padding-top: 5rem;
+}
+body {
+  font-family: var(--font-sans);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* Browser surfaces carry the design too. */
+::selection { background: var(--accent); color: var(--accent-ink); }
+input, textarea { caret-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+a { text-underline-offset: 3px; }
+* { scrollbar-color: var(--line-strong) transparent; }
+input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--accent); }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+.tabular { font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Brand-layer fonts for the WYSIWYG editor preview (same faces the renderer uses). */
+@media (forced-colors: active) {
+  :focus-visible { outline-color: Highlight; }
+}
+
+/* Brand-layer fonts for the WYSIWYG frame previews (same faces the renderer uses). */
 @font-face { font-family: "PINPO Sans"; src: url("/api/fonts/NotoSans.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "PINPO Malayalam"; src: url("/api/fonts/NotoSansMalayalam.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "PINPO Devanagari"; src: url("/api/fonts/NotoSansDevanagari.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }

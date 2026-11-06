@@ -62,7 +62,7 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
-/** India date for "today" checks (offers are local to Kerala). */
+/** India date (IST) for "today" checks — prices are in ₹. */
 export function indiaToday(d = new Date()): string {
   return new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 }

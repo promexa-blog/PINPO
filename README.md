@@ -1,13 +1,13 @@
 # PINPO
 
-PINPO is the local AI ad production studio for **DemandMesh** ([demandmesh.shop](https://demandmesh.shop)).
+PINPO is a local AI ad video studio. Give it a product photo and a short brief; it plans a storyboard, generates AI scenes with fal.ai, animates your real product photo, and adds your brand's overlays, music, voiceover and ending. Every ad is checked (technical, brand, claims, prices, rights) before you export it for Instagram, YouTube or Facebook.
 
-You write a creative brief and PINPO builds an editable storyboard. Scenes are generated with fal.ai, then composed locally with the official DemandMesh brand: overlays, voiceover, music and the outro. Every ad is checked by technical and brand/compliance QA before you export it for social media.
+It works for any brand: add brand kits (name, website, two colours, logo or wordmark, calls to action). DemandMesh ([demandmesh.shop](https://demandmesh.shop)) is set up as the first brand.
 
-- **Plan (source of truth):** [docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md](docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md)
+- **Plan (source of truth):** [docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md](docs/engineering/PINPO_IMPLEMENTATION_PLAN_V2.2.md), extended by [PINPO_PLAN_V3_ADDENDUM.md](docs/engineering/PINPO_PLAN_V3_ADDENDUM.md) (brand kits, studio redesign)
 - **Verified facts:** [docs/engineering/PHASE_0_FINDINGS.md](docs/engineering/PHASE_0_FINDINGS.md)
 
-> **Status:** Phases 0–3 and 5–10 of the plan are implemented and tested (94 unit/integration tests and 4 end-to-end tests). **Phase 4 is still open:** one real ad made with your fal.ai key, then a quality review by DemandMesh (see below). Decisions and deviations from the plan are in [docs/engineering/IMPLEMENTATION_NOTES.md](docs/engineering/IMPLEMENTATION_NOTES.md).
+> **Status:** Phases 0–3 and 5–10 of the plan are implemented and tested (unit, integration and end-to-end tests). **Phase 4 is still open:** one real ad made with your fal.ai key, then your quality review (see below). Decisions and deviations from the plan are in [docs/engineering/IMPLEMENTATION_NOTES.md](docs/engineering/IMPLEMENTATION_NOTES.md).
 
 ## Requirements
 - Node.js 22+
@@ -43,22 +43,25 @@ All studio data lives in **`~/.pinpo`**, outside the project folder. Set `PINPO_
 | `npm test` | Unit and integration tests |
 | `npm run typecheck` / `npm run lint` | Static checks |
 
-## Brand assets (temporary items)
+## Brands
+Open **Brands** → **New brand**. Enter the name, website, a main colour and an accent colour (the form checks they're readable and suggests a darker shade if not), upload a logo (or leave it out to use the name as a text wordmark), and save. The live preview shows the real ending and on-screen text. Edits need **Unlock to edit** and save as a new revision; ads already made keep the revision they used. One brand is the default for new ads.
+
+### DemandMesh (bundled first brand)
 - **Logo:** the 304×62 PNG from demandmesh.shop is a **temporary** official logo. It is never AI-upscaled, and QA warns that it is low resolution. Replace it with the official high-resolution files in `assets/brand/demandmesh/` and update the hashes in `brand.json`.
-- **Fonts:** Noto Sans, Noto Sans Malayalam and Noto Sans Devanagari (OFL) are placeholders until DemandMesh's approved fonts are supplied (`src/server/render/fonts.ts`).
+- **Fonts:** Noto Sans, Noto Sans Malayalam and Noto Sans Devanagari (OFL) are the studio's type family for every brand (custom fonts per brand are future work) (`src/server/render/fonts.ts`).
 
 ## Making ads
-1. Open **Ads** → name the ad, pick a template and platform → **Create ad**.
-2. Fill in the brief:
+1. **Ads → New ad:** pick the brand, a story template (shown as a scene strip) and where it runs → **Continue**.
+2. The editor walks through six steps (the rail at the top shows what's done and what needs fixing; everything autosaves):
    - **Product:** name, how it looks, and a product photo. Transparent PNG cut-outs look best.
-   - **Benefits:** tick "This is true" for each. Only confirmed benefits appear on screen.
-   - **Price and offer:** the discount is calculated for you.
-   - **Call to action and style.**
-3. **Build storyboard.** Then adjust camera, lighting, setting, timing and text layout per scene. Each scene shows a live frame preview with the safe area.
-4. Optional: music and **Voiceover**. Recordings need the voice artist's consent.
-5. **Generate.** Watch progress, then check **Quality checks**.
-6. Mark items needing review as "I reviewed this", tick the claims confirmation, then **Download MP4** and **credits.txt**.
-7. To change a finished ad, use **New version from this**. Unchanged scenes are reused at $0, and older versions stay playable.
+   - **Message:** audience, benefits (tick "This is true" — only confirmed benefits appear on screen), price and offer (the discount is calculated), call to action and style.
+   - **Format:** platform, length, pacing, video model, quality and ending.
+   - **Storyboard:** **Build storyboard**, then adjust camera, lighting, setting, timing and text layout per scene. Frames show at the ad's real shape with the safe area.
+   - **Sound:** optional music and voiceover. Recordings need the voice artist's consent.
+   - **Generate:** summary, anything left to fix, then **Generate**.
+3. Watch progress, then check **Quality checks**.
+4. Mark items needing review as "I reviewed this", tick the claims confirmation, then **Download MP4** and **credits.txt**.
+5. To change a finished ad, use **New version from this**. Unchanged scenes are reused at $0, and older versions stay playable.
 
 ## Real generation with fal.ai (Phase 4)
 1. Put your key in `.env.local`: `FAL_KEY=…` and `FAL_MOCK=0`. The key is only read by the worker.
@@ -77,10 +80,10 @@ Only "Confirmed" is billing data. Run `npm run models:check` before relying on p
 ## What the quality checks mean
 - **Technical:** exact length and size, 30 fps, BT.709 colour, AAC 48 kHz, fast-start MP4, clean decode, loudness −14 LUFS.
 - **Brand:**
-  - official pinned logo
-  - only DemandMesh colours
+  - the brand's pinned logo (or its wordmark)
+  - only the brand's colours
   - readable text inside the platform safe area
-  - correct outro with "demandmesh.shop"
+  - correct ending with the brand's website
   - product photo unchanged (colour/structure measured)
 - **Advertising compliance:**
   - every on-screen claim must be a confirmed brief benefit
@@ -93,8 +96,8 @@ Only "Confirmed" is billing data. Run `npm run models:check` before relying on p
 
 These checks reduce risk but are **not legal review**. Follow the ASCI code and India's Consumer Protection rules for final responsibility.
 
-## Replacing the temporary logo and fonts
-- **Logo:**
+## Replacing the DemandMesh logo and the fonts
+- **Logo:** easiest: **Brands → DemandMesh → Unlock to edit → Upload logo** (saves a new revision). Or, for the bundled seed:
   1. Put the official files (high-resolution PNG) in `assets/brand/demandmesh/`.
   2. Update `logo.horizontal.file` and `sha256` in `brand.json`.
   3. The renderer only accepts a logo whose hash matches. Existing databases need a new brand revision, or a fresh `PINPO_HOME`.

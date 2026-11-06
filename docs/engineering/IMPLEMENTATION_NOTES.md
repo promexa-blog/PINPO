@@ -107,3 +107,23 @@ Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMes
 - **Test hardening:** the final player has its own accessible label ("Final ad, version N"), so tests and screen readers can tell it apart from scene clips.
 - **Final state:** 94 unit/integration tests and 4 e2e tests pass; typecheck and lint are clean.
 - **Not done:** Phase 4, a real-fal ad with user quality approval, needs `FAL_KEY` and a real product.
+
+## v3 — generic studio (brand kits + redesign), 2026-11-06
+
+- **Brand kits** (see PINPO_PLAN_V3_ADDENDUM.md). `brand_kits.is_master` now means "default brand";
+  no schema migration was needed. Logos pinned in each revision's tokens (`logo.horizontal.assetId`),
+  so old ads keep their logo. `PINPO_SEED_BRAND=0` skips seeding DemandMesh on a fresh install.
+- **Studio identity:** PINPO's own tokens (oklch, dark default, light via cookie `pinpo-theme`
+  read in the root layout — no inline script, CSP unchanged). Marigold accent only for primary
+  actions, selection and focus. Inline SVG icon set (no new dependency).
+- **Flow:** `/new` (brand · template scene strip · format at true aspect) → six-step editor
+  (Product, Message, Format, Storyboard, Sound, Generate) with step state in the URL hash, focus moved
+  to each step heading, blocking checks mapped to the step that fixes them.
+- **Gotchas found:** `sr-only` elements inside a horizontally scrolling rail must have a positioned
+  ancestor, or they widen the page (702 px on a 390 px phone). `ui.tsx` is a shared (not client)
+  module so server pages can call `buttonClass()`.
+- **Generic copy:** removed DemandMesh/Kerala wording from templates, creative defaults and brief
+  defaults; scene settings now use the brief's audience location.
+- Verified: typecheck, lint, 98 unit/integration, 4 e2e (desktop + 375 px), impeccable detector
+  (no findings), DOM audit (one h1/main per page, labelled controls, named buttons, no overflow,
+  skip link first) on every page and editor step.

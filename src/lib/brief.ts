@@ -81,7 +81,7 @@ export const BriefInput = z.object({
   }),
   audience: z.object({
     who: text(200),
-    location: text(100).default("Kerala, India"),
+    location: text(100).default(""),
   }),
   campaign: z.object({ objective: Objective, platform: PlatformKeySchema }),
   claims: z.array(ClaimInput).max(12).default([]),

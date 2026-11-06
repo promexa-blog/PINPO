@@ -1,123 +1,150 @@
 import Link from "next/link";
-import { getDefaultBrand } from "@/server/brand/kits";
+import { listBrands } from "@/server/brand/kits";
 import { listAds } from "@/server/db/repos/versions";
-import { db } from "@/server/db";
-import { seedTemplates } from "@/server/planning/templates";
 import { PLATFORMS } from "@/lib/platforms";
-import { SystemStatusPanel } from "@/components/status/system-status";
-import { NewAdForm } from "./_components/new-ad-form";
-import { StudioHeader } from "./_components/header";
-import { CardActions } from "./_components/card-actions";
+import { now as nowMs } from "@/server/util";
+import { AdCard, type AdCardData } from "./_components/ad-card";
+import { PageTitle, buttonClass, type Tone } from "./_components/ui";
+import { IconFrames, IconPlus, IconSearch } from "./_components/icons";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Draft",
-  queued: "Queued",
-  generating: "Generating",
-  composing: "Composing",
-  ready: "Ready",
-  failed: "Needs attention",
-  canceled: "Canceled",
+const STATUS: Record<string, { label: string; tone: Tone; group: string }> = {
+  draft: { label: "Draft", tone: "neutral", group: "draft" },
+  queued: { label: "Queued", tone: "accent", group: "working" },
+  generating: { label: "Generating", tone: "accent", group: "working" },
+  composing: { label: "Editing", tone: "accent", group: "working" },
+  ready: { label: "Ready", tone: "ok", group: "ready" },
+  failed: { label: "Needs attention", tone: "bad", group: "attention" },
+  canceled: { label: "Canceled", tone: "neutral", group: "attention" },
 };
+const FILTERS = [
+  { key: "", label: "All" },
+  { key: "draft", label: "Drafts" },
+  { key: "working", label: "In progress" },
+  { key: "ready", label: "Ready" },
+  { key: "attention", label: "Needs attention" },
+];
+
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+function ago(ms: number, now: number): string {
+  const s = Math.round((ms - now) / 1000);
+  const steps: [number, Intl.RelativeTimeFormatUnit][] = [[60, "second"], [60, "minute"], [24, "hour"], [7, "day"], [4.35, "week"], [12, "month"], [Infinity, "year"]];
+  let v = s;
+  for (const [n, unit] of steps) {
+    if (Math.abs(v) < n) return rtf.format(Math.round(v), unit);
+    v /= n;
+  }
+  return "";
+}
 
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const { q = "", status = "" } = await searchParams;
-  seedTemplates();
-  const brand = getDefaultBrand();
-  const all = brand ? listAds() : [];
-  const ads = all.filter((a) => (!q || a.name.toLowerCase().includes(q.toLowerCase())) && (!status || a.status === status));
-  const templates = (db().prepare("SELECT key, name, description, platforms_json FROM templates ORDER BY builtin DESC, name").all() as { key: string; name: string; description: string; platforms_json: string }[]).map((t) => ({
-    key: t.key,
-    name: t.name,
-    description: t.description,
-    platforms: JSON.parse(t.platforms_json) as string[],
-  }));
+  const brands = listBrands();
+  const all = listAds();
+  const now = nowMs();
+  const count = (g: string) => (g ? all.filter((a) => STATUS[a.status]?.group === g).length : all.length);
+  const ads = all.filter((a) => (!q || a.name.toLowerCase().includes(q.toLowerCase())) && (!status || STATUS[a.status]?.group === status));
+  const cards: AdCardData[] = ads.map((a) => {
+    const p = PLATFORMS[a.platform];
+    return {
+      id: a.id,
+      name: a.name,
+      href: a.status === "draft" ? `/ads/${a.id}/edit` : `/ads/${a.id}`,
+      aspect: p.aspect,
+      platformLabel: p.label,
+      lengthS: (JSON.parse(a.settings_json) as { lengthS: number }).lengthS,
+      version: a.number,
+      versions: a.version_count,
+      status: STATUS[a.status] ?? { label: a.status, tone: "neutral" },
+      brandName: brands.length > 1 ? a.brand_name : null,
+      updated: `Edited ${ago(a.updated_at, now)}`,
+      thumbId: a.thumb_asset_id,
+      videoId: a.status === "ready" ? a.final_asset_id : null,
+      productId: a.product_asset_id,
+    };
+  });
+  const filterHref = (key: string) => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (key) sp.set("status", key);
+    const s = sp.toString();
+    return s ? `/?${s}` : "/";
+  };
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-6xl flex-col px-4 sm:px-8">
-      <StudioHeader />
-      <main className="flex-1 py-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Ads</h1>
-            <p className="mt-1 text-sm text-dm-secondary">Every ad you&apos;ve made, newest first.</p>
-          </div>
-        </div>
-
-        <section aria-labelledby="new-ad" className="mt-6">
-          <h2 id="new-ad" className="sr-only">
-            New ad
-          </h2>
-          {brand ? <NewAdForm templates={templates} /> : <p className="rounded-xl border border-dm-border bg-dm-surface p-4 text-sm">Start the studio with <code>npm run dev</code> — then add a brand.</p>}
-        </section>
-
-        <form className="mt-8 flex flex-wrap items-end gap-3" role="search">
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Search
-            <input name="q" defaultValue={q} placeholder="Ad name" className="min-h-11 rounded-lg border border-dm-border px-3 text-sm font-normal" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold">
-            Status
-            <select name="status" defaultValue={status} className="min-h-11 rounded-lg border border-dm-border px-3 text-sm font-normal">
-              <option value="">All</option>
-              {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="min-h-11 rounded-lg border border-dm-border px-4 text-sm font-semibold hover:bg-dm-surface">
-            Filter
-          </button>
-          {q || status ? (
-            <Link href="/" className="min-h-11 content-center text-sm underline-offset-4 hover:underline">
-              Clear
+    <main id="main" className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
+      <PageTitle
+        title="Ads"
+        description={all.length ? `${all.length} ad${all.length === 1 ? "" : "s"}, newest first. Hover a finished ad to play it.` : undefined}
+        actions={
+          brands.length ? (
+            <Link href="/new" className={buttonClass("primary")}>
+              <IconPlus size={17} />
+              New ad
             </Link>
-          ) : null}
-        </form>
+          ) : null
+        }
+      />
 
-        <section aria-labelledby="ad-list" className="mt-6">
-          <h2 id="ad-list" className="sr-only">
-            Your ads
+      {all.length === 0 ? (
+        <section aria-labelledby="empty-h" className="grid place-items-center rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-16 text-center">
+          <span className="grid size-14 place-items-center rounded-xl bg-accent-soft text-accent-text">
+            <IconFrames size={30} strokeWidth={1.5} />
+          </span>
+          <h2 id="empty-h" className="mt-5 text-xl font-semibold tracking-tight">
+            {brands.length ? "Make your first ad" : "Start with your brand"}
           </h2>
-          {ads.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-dm-border p-8 text-center text-sm text-dm-secondary">{all.length ? "No ads match this filter." : "No ads yet. Name your first one above and pick a template."}</p>
-          ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {ads.map((a) => (
-                <li key={a.id} className="flex flex-col overflow-hidden rounded-xl border border-dm-border bg-dm-bg">
-                  <Link href={a.status === "draft" ? `/ads/${a.id}/edit` : `/ads/${a.id}`} className="group flex flex-1 flex-col transition-colors hover:bg-dm-surface">
-                    <div className="flex aspect-video max-h-56 items-center justify-center overflow-hidden bg-dm-surface">
-                      {a.thumb_asset_id ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/api/assets/${a.thumb_asset_id}`} alt="" className="h-full w-full object-contain" />
-                      ) : (
-                        <span className="text-xs text-dm-secondary">{a.status === "draft" ? "Draft — not generated yet" : "No preview yet"}</span>
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-2 p-4">
-                      <p className="font-semibold group-hover:underline">{a.name}</p>
-                      <p className="text-xs text-dm-secondary">
-                        {PLATFORMS[a.platform].label} · {(JSON.parse(a.settings_json) as { lengthS: number }).lengthS}s · v{a.number}
-                        {a.version_count > 1 ? ` of ${a.version_count}` : ""}
-                      </p>
-                      <p className="mt-auto text-xs font-semibold">{STATUS_LABEL[a.status] ?? a.status}</p>
-                    </div>
+          <p className="mt-2 max-w-md text-sm text-ink-2">
+            {brands.length
+              ? "Pick a template and a format, add a product photo and a few true benefits. PINPO plans the scenes, generates them and adds your brand."
+              : "Add your brand's name, colours and logo once. Every ad you make uses them for its text, buttons and closing frame."}
+          </p>
+          <Link href={brands.length ? "/new" : "/brands/new"} className={`${buttonClass("primary")} mt-6`}>
+            <IconPlus size={17} />
+            {brands.length ? "New ad" : "Add a brand"}
+          </Link>
+        </section>
+      ) : (
+        <>
+          <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <nav aria-label="Filter by status" className="-mx-1 flex gap-1 overflow-x-auto">
+              {FILTERS.map((f) => {
+                const active = status === f.key;
+                return (
+                  <Link key={f.key} href={filterHref(f.key)} aria-current={active ? "page" : undefined} className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${active ? "bg-panel-2 text-ink ring-1 ring-line-strong" : "text-ink-2 hover:bg-panel-2 hover:text-ink"}`}>
+                    {f.label}
+                    <span className={`tabular text-xs ${active ? "text-accent-text" : "text-ink-3"}`}>{count(f.key)}</span>
                   </Link>
-                  <CardActions adId={a.id} name={a.name} />
-                </li>
+                );
+              })}
+            </nav>
+            <form role="search" className="relative w-full lg:w-72">
+              {status ? <input type="hidden" name="status" value={status} /> : null}
+              <label htmlFor="ad-search" className="sr-only">
+                Search ads by name
+              </label>
+              <IconSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
+              <input id="ad-search" name="q" type="search" defaultValue={q} placeholder="Search by name" className="min-h-10 w-full rounded-lg border border-line bg-sunken pl-9 pr-3 text-sm placeholder:text-ink-3 hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35" />
+            </form>
+          </div>
+
+          {cards.length === 0 ? (
+            <div className="py-16 text-center">
+              <p className="font-semibold">No ads match {q ? `"${q}"` : "this filter"}.</p>
+              <Link href="/" className="mt-2 inline-block text-sm font-semibold text-accent-text hover:underline">
+                Show all ads
+              </Link>
+            </div>
+          ) : (
+            <ul className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(min(15rem,100%),1fr))] gap-4" aria-label="Your ads">
+              {cards.map((c) => (
+                <AdCard key={c.id} ad={c} />
               ))}
             </ul>
           )}
-        </section>
-
-        <details className="mt-10">
-          <summary className="cursor-pointer text-sm font-semibold">Studio status</summary>
-          <SystemStatusPanel />
-        </details>
-      </main>
-    </div>
+        </>
+      )}
+    </main>
   );
 }

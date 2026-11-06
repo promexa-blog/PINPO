@@ -5,7 +5,7 @@ import { buildStoryboard, createAndFillAd } from "./helpers";
 test("create, generate, review and export an ad", async ({ page }, info) => {
   const adPath = await createAndFillAd(page, `E1 ${info.project.name}`);
   await buildStoryboard(page);
-  const generate = page.getByRole("button", { name: /Generate version 1/ });
+  const generate = page.getByRole("button", { name: /Generate version 1/ }).first();
   await expect(generate).toBeEnabled();
   await generate.click();
   await page.waitForURL(new RegExp(`${adPath}$`));

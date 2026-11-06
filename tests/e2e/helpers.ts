@@ -10,25 +10,36 @@ export async function waitForStudio(page: Page) {
     .toBe(true);
 }
 
-/** Creates an ad through the UI and fills a complete, compliant brief. Returns the ad URL path. */
+/** Moves to an editor step using the step rail. */
+export async function goToStep(page: Page, label: "Product" | "Message" | "Format" | "Storyboard" | "Sound" | "Generate") {
+  await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: new RegExp(`^${label}`) }).click();
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
+}
+
+/** Creates an ad through the UI (New ad → step flow) and fills a complete, compliant brief. Returns the ad URL path. */
 export async function createAndFillAd(page: Page, name: string) {
   await page.goto("/");
   await waitForStudio(page);
-  await page.reload();
-  await page.getByLabel("Ad name").fill(name);
-  await page.getByRole("button", { name: "Create ad" }).click();
+  await page.goto("/new");
+  await page.getByLabel(/^Name/).fill(name);
+  await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForURL(/\/ads\/ad_[a-f0-9]+\/edit/);
+
+  // Step 1 — product
   await page.getByLabel("Product name").fill("Steel Lunch Box");
   await page.getByLabel("How the product looks").fill("A brushed stainless-steel three-tier lunch box with a matte black clip handle");
-  await page.getByLabel("Who is it for?").fill("Young office workers in Kochi");
   await page.getByLabel("Add a product photo").setInputFiles(PRODUCT_PNG);
-  await page.getByLabel("I have permission to use this image in DemandMesh ads.").check();
+  await page.getByLabel("I have permission to use this image in my ads.").check();
   await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.getByRole("img", { name: "Product photo" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Product photo 1" })).toBeVisible();
+
+  // Step 2 — message
+  await page.getByRole("button", { name: "Next: Message" }).click();
+  await page.getByLabel("Who is it for?").fill("Young office workers in Kochi");
   for (const text of ["Three separate tiers keep food apart", "Clip handle carries easily"]) {
     await page.getByRole("button", { name: "Add benefit" }).click();
     const n = await page.getByLabel(/^Benefit \d+$/).count();
-    await page.getByLabel(`Benefit ${n}`).fill(text);
+    await page.getByLabel(`Benefit ${n}`, { exact: true }).fill(text);
     await page.getByLabel("This is true for this product.").nth(n - 1).check();
   }
   await page.getByLabel("Selling price (₹)").fill("899");
@@ -39,7 +50,8 @@ export async function createAndFillAd(page: Page, name: string) {
 }
 
 export async function buildStoryboard(page: Page) {
-  await page.getByRole("button", { name: /Build storyboard|Rebuild storyboard/ }).click();
-  await expect(page.getByText("1. Hook — product reveal")).toBeVisible();
+  await goToStep(page, "Storyboard");
+  await page.getByRole("button", { name: /Build storyboard|Rebuild from brief/ }).click();
+  await expect(page.getByRole("heading", { name: /Hook — product reveal/ })).toBeVisible();
   await expect(page.getByText("All changes saved")).toBeVisible();
 }

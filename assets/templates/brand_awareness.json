@@ -1,7 +1,7 @@
 {
   "key": "brand_awareness",
   "name": "Brand awareness",
-  "description": "DemandMesh as a place to shop: brand mood, categories, the tagline, the shopping experience.",
+  "description": "Your brand as a place to shop: brand mood, what you sell, the tagline, the shopping experience.",
   "platforms": [
     "instagram_reels",
     "instagram_story",
@@ -28,13 +28,13 @@
       "sceneType": "ai_scene",
       "showsProduct": false,
       "minLengthS": 15,
-      "visualDirection": "Warm Kerala everyday life — the people DemandMesh serves.",
+      "visualDirection": "Warm everyday life — the people the brand serves.",
       "overlay": {
         "source": "tagline",
         "layout": "centered",
         "motion": "fade-up"
       },
-      "promptScaffold": "{audienceWho} in {setting}, warm and welcoming everyday life in Kerala. {camera}. {lighting}. {toneMood}."
+      "promptScaffold": "{audienceWho} in {setting}, warm and welcoming everyday life in {audienceLocation}. {camera}. {lighting}. {toneMood}."
     },
     {
       "role": "categories",
@@ -43,7 +43,7 @@
       "sceneType": "ai_scene",
       "showsProduct": false,
       "minLengthS": 15,
-      "visualDirection": "Fashion, personal care, home and office items in quick succession.",
+      "visualDirection": "The range of things the brand sells, in quick succession.",
       "overlay": {
         "source": "claim:0",
         "layout": "lower_third",

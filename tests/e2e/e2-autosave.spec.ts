@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { createAndFillAd } from "./helpers";
+import { createAndFillAd, goToStep } from "./helpers";
 
 /** E2: autosave, reload, continue — data preserved; A5 conflict across tabs. */
 test("autosaves the draft and survives a reload; second tab gets a conflict", async ({ page, context }) => {
   await createAndFillAd(page, "E2 autosave");
-  await page.reload();
-  await expect(page.getByLabel("Product name")).toHaveValue("Steel Lunch Box");
-  await expect(page.getByLabel("Benefit 2")).toHaveValue("Clip handle carries easily");
+  await page.reload(); // stays on the Message step (#message)
+  await expect(page.getByLabel("Benefit 2", { exact: true })).toHaveValue("Clip handle carries easily");
   await expect(page.getByLabel("Selling price (₹)")).toHaveValue("899");
+  await goToStep(page, "Product");
+  await expect(page.getByLabel("Product name")).toHaveValue("Steel Lunch Box");
 
   const tab2 = await context.newPage();
   await tab2.goto(page.url());

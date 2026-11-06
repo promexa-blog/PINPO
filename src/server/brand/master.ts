@@ -20,6 +20,7 @@ export interface BrandTokens {
   motion: Record<string, unknown>;
   logo: Record<string, { file: string; sha256: string; origin?: string; temporary?: boolean; maxScale?: number }>;
   approvedCtas: Record<string, string[]>;
+  groupBuyLine?: string;
 }
 
 const BRAND_DIR = () => path.join(paths.bundled.brand, "demandmesh");

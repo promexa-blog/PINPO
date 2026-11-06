@@ -104,7 +104,7 @@ export function createAd(input: { name: string; templateKey: string; platform: P
         `INSERT INTO ad_versions (id, ad_id, number, status, settings_json, finishing_json, platform, pacing, brand_revision_id, template_id, created_at, updated_at)
          VALUES (?, ?, 1, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(versionId, adId, JSON.stringify(settings), JSON.stringify(DEFAULT_FINISHING), input.platform, defaultPacing(brief), brand.revisionId, template.id, t, t);
+      .run(versionId, adId, JSON.stringify(settings), JSON.stringify({ ...DEFAULT_FINISHING, outroType: template.defaultOutro }), input.platform, defaultPacing(brief), brand.revisionId, template.id, t, t);
     writeBrief(versionId, brief);
     return { adId, versionId };
   });

@@ -23,6 +23,7 @@ const SHORT_SIDE: Record<Resolution, number> = { "480p": 480, "720p": 720, "1080
 
 interface SceneState {
   startImageUrl?: string;
+  referenceImageUrls?: string[];
   redownloaded?: boolean;
   lastStatus?: ProviderStatus["state"];
   file?: string;
@@ -103,6 +104,16 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
       switch (job.stage) {
         case "preparing": {
           let startImageUrl: string | undefined;
+          let referenceImageUrls: string[] | undefined;
+          if (input.mode === "ref") {
+            // Original product photos as references (plan §7), uploaded unaltered.
+            referenceImageUrls = [];
+            for (const id of input.referenceAssetIds) {
+              const a = getAsset(id);
+              if (a) referenceImageUrls.push(await provider.uploadImage(await readFile(absolutePath(a)), a.mime));
+            }
+            if (!referenceImageUrls.length) throw new AppError("NO_REFERENCES", "No product reference images could be uploaded", 422);
+          }
           if (input.mode === "i2v") {
             const brand = getMasterBrand()!;
             const dir = path.join(paths.work, `${job.id}-start`);
@@ -112,7 +123,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
             startImageUrl = await provider.uploadImage(await readFile(frame.file), "image/png");
             await rm(dir, { recursive: true, force: true });
           }
-          ctx.transition({ stage: "submitting", message: input.mode === "i2v" ? "start frame uploaded" : "inputs ready", resultJson: { ...st, startImageUrl }, submitState: "none" });
+          ctx.transition({ stage: "submitting", message: input.mode === "i2v" ? "start frame uploaded" : input.mode === "ref" ? `${referenceImageUrls!.length} reference image(s) uploaded` : "inputs ready", resultJson: { ...st, startImageUrl, referenceImageUrls }, submitState: "none" });
           break;
         }
         case "submitting": {
@@ -126,7 +137,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
               ctx.transition({ stage: "in_queue", submitState: "submitted", falRequestId: candidates[0]!, message: "recovered request after crash (single match)" });
               break;
             }
-            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate);
+            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate, input.mode ?? "t2v", input.clipAudio);
             addCost({ kind: "exposure_duplicate", usd, versionId: input.versionId, jobId: job.id, sceneId: input.sceneId, attempt: job.attempt, possibleDuplicate: true, pricingVersion: pricingVersion(model, input.pricingDate), mock: provider.name === "mock", note: found ? `${candidates.length} unmatched requests in window` : "request lookup unavailable" });
             ctx.log("lost request after crash — resubmitting; possible duplicate charge recorded");
           }
@@ -139,8 +150,9 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
             audio: input.clipAudio,
             seed: input.seed,
             startImageUrl: st.startImageUrl,
+            referenceImageUrls: st.referenceImageUrls,
           });
-          ctx.transition({ submitState: "submitting", submitStartedAt: now(), message: "submitting to fal" });
+          ctx.transition({ submitState: "submitting", submitStartedAt: now(), falEndpoint: endpoint, message: "submitting to fal" });
           const requestId = await provider.submit(endpoint, falInput);
           ctx.transition({ stage: "in_queue", submitState: "submitted", falRequestId: requestId, message: `submitted (${provider.name})`, data: { requestedS: falInput.duration } });
           break;
@@ -159,7 +171,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
             break;
           }
           if (s.error) {
-            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate);
+            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate, input.mode ?? "t2v", input.clipAudio);
             addCost({ kind: "exposure_failed", usd, versionId: input.versionId, jobId: job.id, sceneId: input.sceneId, attempt: job.attempt, falRequestId: job.fal_request_id, pricingVersion: pricingVersion(model, input.pricingDate), mock: provider.name === "mock", note: `fal reported: ${s.error}` });
             if (/content_policy/i.test(`${s.errorType} ${s.error}`)) throw new ProviderError("content_policy", "fal rejected this prompt or image under its content policy.");
             return regenerateOrFail(ctx, input, "RUNNER_FAILURE", `Generation failed on fal: ${s.error}`);
@@ -197,7 +209,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
               ctx.transition({ stage: "downloading", message: `clip failed validation (${why}); downloading again`, resultJson: { ...st, redownloaded: true, file: undefined } });
               break;
             }
-            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate);
+            const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate, input.mode ?? "t2v", input.clipAudio);
             addCost({ kind: "exposure_failed", usd, versionId: input.versionId, jobId: job.id, sceneId: input.sceneId, attempt: job.attempt, falRequestId: job.fal_request_id, pricingVersion: pricingVersion(model, input.pricingDate), mock: provider.name === "mock", note: `delivered clip rejected: ${why}` });
             return regenerateOrFail(ctx, input, "CLIP_INVALID", `Delivered clip was invalid twice (${why}).`);
           }
@@ -220,7 +232,7 @@ async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
           });
           addCost({
             kind: "calculated",
-            usd: provider.name === "mock" ? 0 : deliveredListPrice(model, input.resolution, delivered, input.pricingDate),
+            usd: provider.name === "mock" ? 0 : deliveredListPrice(model, input.resolution, delivered, input.pricingDate, input.mode ?? "t2v", input.clipAudio),
             versionId: input.versionId,
             jobId: job.id,
             sceneId: input.sceneId,
@@ -340,7 +352,7 @@ async function cancel(ctx: JobContext, input: SceneJobInput): Promise<void> {
       ctx.log(`cancel call failed: ${String(err)}`);
       outcome = "requested";
     }
-    const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate);
+    const { usd } = clipListPrice(model, input.resolution, input.durationS, input.pricingDate, input.mode ?? "t2v", input.clipAudio);
     addCost({
       kind: "exposure_canceled",
       usd: outcome === "removed" || provider.name === "mock" ? 0 : usd,

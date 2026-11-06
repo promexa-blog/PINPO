@@ -1,0 +1,100 @@
+{
+  "key": "product_demo",
+  "name": "Product demonstration",
+  "description": "Show how the product works, step by step, ending on the result.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "product",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "hook",
+      "label": "Hook",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The product, clearly, in the first two seconds.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "step_1",
+      "label": "Step 1",
+      "weight": 1.2,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "First step of using the product, hands visible.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "Hands demonstrating the first step of using {appearance} on {setting}. Top-down or close framing. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "step_2",
+      "label": "Step 2",
+      "weight": 1.2,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "Second step.",
+      "overlay": {
+        "source": "claim:1",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "Hands demonstrating the next step of using {appearance} on {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "result",
+      "label": "Result",
+      "weight": 1.1,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The finished result.",
+      "overlay": {
+        "source": "claim:2",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "The finished result of using {appearance}, neatly presented on {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 1.2,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Product with offer and call to action.",
+      "overlay": {
+        "source": "offer_or_cta",
+        "layout": "corner_badge",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

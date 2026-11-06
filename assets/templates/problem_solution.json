@@ -1,0 +1,115 @@
+{
+  "key": "problem_solution",
+  "name": "Problem and solution",
+  "description": "Show an everyday problem your audience recognises, then the product solving it.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "standard",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "problem",
+      "label": "Problem",
+      "weight": 1.1,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "A relatable everyday frustration — no product yet.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} in {setting}, visibly dealing with a small everyday inconvenience that a {categoryNoun} would solve. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "frustration",
+      "label": "Frustration beat",
+      "weight": 0.9,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 45,
+      "visualDirection": "A quick beat that lands the problem.",
+      "overlay": {
+        "source": "claim:3",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "Close-up of {audienceWho} reacting to the inconvenience in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "reveal",
+      "label": "Product appears",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The real product enters as the answer.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "lower_third",
+        "motion": "scale-in"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "solution",
+      "label": "Solution in use",
+      "weight": 1.3,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The product solving the problem in a real moment.",
+      "overlay": {
+        "source": "claim:1",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} easily using {appearance} in {setting}, the problem solved. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "benefit",
+      "label": "Benefit",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "Hold on the product while a second benefit lands.",
+      "overlay": {
+        "source": "claim:2",
+        "layout": "split_headline",
+        "motion": "slide-in"
+      },
+      "productMotion": "parallax"
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 1.2,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Product with offer and call to action.",
+      "overlay": {
+        "source": "offer_or_cta",
+        "layout": "corner_badge",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

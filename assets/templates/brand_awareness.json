@@ -1,0 +1,100 @@
+{
+  "key": "brand_awareness",
+  "name": "Brand awareness",
+  "description": "DemandMesh as a place to shop: brand mood, categories, the tagline, the shopping experience.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "standard",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "brand_mood",
+      "label": "Brand mood",
+      "weight": 1.1,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "Warm Kerala everyday life — the people DemandMesh serves.",
+      "overlay": {
+        "source": "tagline",
+        "layout": "centered",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} in {setting}, warm and welcoming everyday life in Kerala. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "categories",
+      "label": "Categories montage",
+      "weight": 1.3,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "Fashion, personal care, home and office items in quick succession.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "A tidy, attractive arrangement of everyday fashion accessories, personal care items, kitchenware and stationery. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "product",
+      "label": "Featured product",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "One real product from the store.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "experience",
+      "label": "Shop experience",
+      "weight": 1.1,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 30,
+      "visualDirection": "The easy feeling of shopping together.",
+      "overlay": {
+        "source": "claim:1",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} happily receiving a parcel at home in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Call to action.",
+      "overlay": {
+        "source": "cta",
+        "layout": "centered",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

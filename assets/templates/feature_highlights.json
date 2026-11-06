@@ -1,0 +1,100 @@
+{
+  "key": "feature_highlights",
+  "name": "Feature highlights",
+  "description": "Three confirmed features, one per scene, then the call to action.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "product",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "hook",
+      "label": "Hook",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The product, front and centre.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "feature_1",
+      "label": "Feature 1",
+      "weight": 1.1,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "First feature, shown not told.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "Detail shot showing a key feature of {appearance} on {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "feature_2",
+      "label": "Feature 2",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Second feature on the real product.",
+      "overlay": {
+        "source": "claim:1",
+        "layout": "split_headline",
+        "motion": "slide-in"
+      },
+      "productMotion": "parallax"
+    },
+    {
+      "role": "feature_3",
+      "label": "Feature 3",
+      "weight": 1.1,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "Third feature in use.",
+      "overlay": {
+        "source": "claim:2",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} using {appearance} in {setting}, highlighting another feature. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 1.2,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Product with offer and call to action.",
+      "overlay": {
+        "source": "offer_or_cta",
+        "layout": "corner_badge",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

@@ -1,13 +1,22 @@
 import "../guard";
-import type { ModelSpec, Resolution } from "./registry";
-import { requestDuration } from "./registry";
+import type { GenMode, ModelSpec, PricePeriod, Resolution } from "./types";
+import { requestDuration } from "./types";
 
-/** Price per second in effect on `date` (YYYY-MM-DD). Falls back to the latest open period. */
-export function pricePerSecond(model: ModelSpec, resolution: Resolution, date: string): number {
-  const periods = model.pricing.periods;
-  const match = periods.find((p) => (!p.from || date >= p.from) && (!p.until || date <= p.until));
-  const period = match ?? periods[periods.length - 1]!;
-  return period.perSecond[resolution];
+function periodFor(periods: PricePeriod[], date: string): PricePeriod {
+  return periods.find((p) => (!p.from || date >= p.from) && (!p.until || date <= p.until)) ?? periods[periods.length - 1]!;
+}
+
+/**
+ * List price per second in effect on `date` (YYYY-MM-DD) for a mode, resolution and audio choice.
+ * Mode-specific tables (e.g. MiniMax reference) override the default table.
+ */
+export function pricePerSecond(model: ModelSpec, resolution: Resolution, date: string, mode: GenMode = "t2v", audio = false): number {
+  const periods = model.pricing.modes?.[mode] ?? model.pricing.periods;
+  const p = periodFor(periods, date);
+  const base = p.perSecond[resolution];
+  if (base === undefined) throw new Error(`${model.label} has no price for ${resolution}`);
+  const extra = audio && model.audio === "toggle" ? p.audioPerSecond?.[resolution] ?? 0 : 0;
+  return base + extra;
 }
 
 export function pricingVersion(model: ModelSpec, date: string): string {
@@ -15,14 +24,14 @@ export function pricingVersion(model: ModelSpec, date: string): string {
 }
 
 /** List-price cost of one fal request (requested — not planned — duration). */
-export function clipListPrice(model: ModelSpec, resolution: Resolution, plannedS: number, date: string): { usd: number; requestedS: number } {
+export function clipListPrice(model: ModelSpec, resolution: Resolution, plannedS: number, date: string, mode: GenMode = "t2v", audio = false): { usd: number; requestedS: number } {
   const requestedS = requestDuration(model, plannedS);
-  return { usd: round4(requestedS * pricePerSecond(model, resolution, date)), requestedS };
+  return { usd: round4(requestedS * pricePerSecond(model, resolution, date, mode, audio)), requestedS };
 }
 
 /** Calculated cost from the delivered clip's measured duration (plan §10 "Calculated"). */
-export function deliveredListPrice(model: ModelSpec, resolution: Resolution, deliveredS: number, date: string): number {
-  return round4(deliveredS * pricePerSecond(model, resolution, date));
+export function deliveredListPrice(model: ModelSpec, resolution: Resolution, deliveredS: number, date: string, mode: GenMode = "t2v", audio = false): number {
+  return round4(deliveredS * pricePerSecond(model, resolution, date, mode, audio));
 }
 
 export const round4 = (n: number) => Math.round(n * 10_000) / 10_000;

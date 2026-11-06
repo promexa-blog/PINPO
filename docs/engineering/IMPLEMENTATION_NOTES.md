@@ -27,3 +27,23 @@ This log covers decisions made while building against `PINPO_IMPLEMENTATION_PLAN
 - Killing the `tsx` wrapper with SIGKILL leaves the real Node worker running. Tests now spawn `node --import tsx` so crash tests are real. `npm run dev` is unaffected, because `concurrently -k` and `tsx watch` forward signals.
 - Worker shutdown waited without limit for handlers after aborting them. It now bounds every wait (5 s grace, 5 s after abort) and has a 45 s hard-exit timer. Jobs resume from their stored stage, so a fast exit is safe.
 - The product check compared transparent cut-outs as black. It now compares **only inside the alpha mask** for ΔE, and computes SSIM against the reference composited over the rendered backdrop. A cut-out lunch box measures mean ΔE 0.54, P95 1.55, SSIM 0.995.
+
+## Phase 4 — pending (needs the user)
+Phase 4 is generating a real 15s ad with the user's fal key and a real DemandMesh product, then getting the user's quality approval. It is **not done**: `.env.local` has no `FAL_KEY` (mock mode), and no real product photo has been supplied. The user asked for autonomous progress, so work continued with Phase 5. To run Phase 4:
+1. Put `FAL_KEY=…` and `FAL_MOCK=0` in `.env.local`, then run `npm run dev`.
+2. Create a *Product showcase* ad and upload the real product photo.
+3. Generate at 720p with Wan 3.0, which is about $0.70–0.80 at list price.
+
+## Phase 5 — expand creative
+- **Registry re-verified against live fal before coding** (`npm run models:check` passes for 5 models and all modes). Corrections versus the earlier research:
+  - **Gemini Omni Flash v1.1** allows **3–10 s** (15 s is v1.2), costs $0.03/$0.10/$0.15 per second, and has no audio or seed parameters.
+  - **Kling v3 Pro** has **no resolution parameter**, and its image-to-video follows the image's aspect. The registry exposes one 720p tier.
+  - **MiniMax H3 reference mode** has its own, higher price ($0.05/$0.08/$0.16 per second plus reference tokens), so pricing now supports per-mode tables and Kling's audio surcharge.
+  - **Seedance 2.0 Mini** is token-billed. fal's per-second figures are used as **estimates**, and the UI says so.
+- **Reference mode:** AI product scenes automatically use the reference endpoint when the model has one (Seedance, MiniMax, Gemini). The original product photos are uploaded unaltered, and prompts refer to them with each model's tag (`@Image1`, `Image 1`, …).
+- **Templates:** 8 built-ins, including **Group buy**. The group-buy hook uses DemandMesh's own line "Buy it now, or buy together for less", verbatim from demandmesh.shop, added as the brand token `groupBuyLine`. Group-buy price, minimum buyers and deadline lines are generated only from the brief.
+- **Outros:** Standard, Promotional (needs an offer), Product-specific (original photo, name, price) and Minimal logo. A light-on-white version of the minimal outro is used until an official inverse logo exists.
+- **Rendering snapshots:** 7 outro references and 4 Malayalam/Hindi shaping references are committed in `tests/fixtures/render-refs/` after visual review.
+- **Known limitations:**
+  - Generated offer and group-buy lines (e.g. "Group price when 5 people join") are English in every ad language. No machine translation is done, because that would be invented copy.
+  - The 16:9 outro reads small. This is flagged for the Phase 9 polish pass.

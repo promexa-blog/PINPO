@@ -4,7 +4,8 @@ import { PLATFORMS } from "@/lib/platforms";
 import { getModel, requestDuration, type GenMode } from "../models/registry";
 import { pricingVersion } from "../models/pricing";
 import { checkDraft, draftScenes } from "../planning/draft";
-import { requireVersion, settingsOf, getScenes } from "../db/repos/versions";
+import { requireVersion, settingsOf, getScenes, getBrief } from "../db/repos/versions";
+import { sceneMode } from "../planning/estimate";
 import { getAsset } from "../storage/assets";
 import { assertDiskSpace } from "../storage/disk";
 import { enqueue, requestCancel } from "./queue";
@@ -32,6 +33,7 @@ export interface SceneJobInput {
   seed: number;
   mode: GenMode | null;
   endpoint: string | null;
+  referenceAssetIds: string[];
   requestedS: number;
   pricingDate: string;
 }
@@ -61,11 +63,12 @@ export async function startGenerate(versionId: string): Promise<{ versionId: str
     const p = PLATFORMS[v.platform];
     const date = indiaToday();
     const rows = getScenes(versionId);
+    const brief = getBrief(versionId);
     let jobs = 0;
     rows.forEach((row, i) => {
       const s = scenes[i]!;
       const ai = s.sceneType !== "product_original";
-      const mode: GenMode | null = !ai ? null : s.sceneType === "ai_from_product" ? "i2v" : "t2v";
+      const mode: GenMode | null = sceneMode(s.sceneType);
       const product = s.productAssetId ? getAsset(s.productAssetId) : undefined;
       const input: SceneJobInput = {
         versionId,
@@ -85,7 +88,8 @@ export async function startGenerate(versionId: string): Promise<{ versionId: str
         clipAudio: settings.clipAudio && model.audio === "toggle",
         seed: settings.seed,
         mode,
-        endpoint: mode ? model.endpoints[mode] : null,
+        endpoint: mode ? model.endpoints[mode] ?? null : null,
+        referenceAssetIds: mode === "ref" ? brief.product.imageAssetIds.slice(0, model.references?.max ?? 0) : [],
         requestedS: ai ? requestDuration(model, s.durationS) : s.durationS,
         pricingDate: date,
       };

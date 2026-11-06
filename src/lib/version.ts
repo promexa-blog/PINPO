@@ -3,7 +3,7 @@ import { BriefInput, ClaimInput, Lang } from "./brief";
 
 /** Version-level settings + editable scene shape, shared by editor and API (client-safe). */
 
-export const ModelIdSchema = z.enum(["wan-3.0", "minimax-h3-max-turbo"]);
+export const ModelIdSchema = z.enum(["wan-3.0", "minimax-h3-max-turbo", "kling-v3-pro", "seedance-2.0-mini", "gemini-omni-flash-1.1"]);
 export const ResolutionSchema = z.enum(["480p", "720p", "1080p"]);
 export const PacingSchema = z.enum(["calm", "standard", "fast"]);
 export const AudioModeSchema = z.enum(["music_only", "clip_only", "mix"]);
@@ -29,7 +29,7 @@ export const Finishing = z.object({
 export type Finishing = z.infer<typeof Finishing>;
 
 const OverlayLineSchema = z.object({
-  kind: z.enum(["product_name", "claim", "offer_price", "offer_mrp", "offer_discount", "offer_validity", "cta", "placeholder"]),
+  kind: z.enum(["product_name", "claim", "offer_price", "offer_mrp", "offer_discount", "offer_validity", "group_price", "group_min", "group_deadline", "tagline", "brand_line", "cta", "placeholder"]),
   text: z.string().max(200),
   claimId: z.string().optional(),
 });

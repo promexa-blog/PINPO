@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import type { Lang } from "@/lib/brief";
 import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
 import type { BrandColors, Frame } from "@/lib/brand-layout/tokens";
-import { OverlayLayer, ProductStill, StandardOutro, type LayoutVariant, type OverlayLine } from "@/lib/brand-layout/components";
+import { MinimalOutro, OverlayLayer, ProductOutro, ProductStill, PromotionalOutro, StandardOutro, type LayoutVariant, type OverlayLine } from "@/lib/brand-layout/components";
 import type { MasterBrand } from "../brand/master";
 import { absolutePath, getAsset } from "../storage/assets";
 import { AppError, sha256 } from "../util";
@@ -71,7 +71,7 @@ export async function renderOverlay(args: {
   const lines = args.lines.filter((l) => l.kind !== "placeholder");
   if (lines.length !== args.lines.length) throw new AppError("PLACEHOLDER_IN_OVERLAY", "Overlay still contains placeholder text", 422);
   const bodyHtml = renderToStaticMarkup(createElement(OverlayLayer, { frame, colors, lang: args.lang, layout: args.layout, lines }));
-  const fonts: FontNeed[] = lines.map((l) => ({ lang: /^offer_/.test(l.kind) ? "en" : args.lang, weight: 700, text: l.text }));
+  const fonts: FontNeed[] = lines.map((l) => ({ lang: /^(offer_|group_)/.test(l.kind) ? "en" : args.lang, weight: 700, text: l.text }));
   await renderer.render({ width: frame.width, height: frame.height, transparent: true, css: "", bodyHtml, fonts, outFile: args.outFile });
   return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, f: frame, l: args.layout, lang: args.lang, lines })) };
 }
@@ -98,6 +98,47 @@ export async function renderStandardOutro(args: { brand: MasterBrand; platform: 
     outFile: args.outFile,
   });
   return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, frame, cta: args.cta, logo: logo.asset.sha256, website, tag: args.brand.tokens.tagline })) };
+}
+
+export type OutroType = "standard" | "promotional" | "product" | "minimal";
+
+/**
+ * Renders any DemandMesh outro preset (plan §6). Offer/price text comes only from brief-derived
+ * lines; the product image is the original upload; the logo is the pinned official file.
+ */
+export async function renderOutro(args: {
+  brand: MasterBrand;
+  platform: PlatformKey;
+  lang: Lang;
+  type: OutroType;
+  cta: string;
+  offerLines: OverlayLine[];
+  product?: { assetId: string; name: string; price: string | null };
+  outFile: string;
+}): Promise<RenderedPng> {
+  if (args.type === "standard") return renderStandardOutro(args);
+  const frame = frameFor(args.platform);
+  const colors = brandColors(args.brand);
+  const logo = officialLogo(args.brand);
+  const website = args.brand.tokens.website;
+  if (website !== "demandmesh.shop") throw new AppError("OUTRO_WEBSITE", "Outro website must be exactly demandmesh.shop", 500);
+  const common = { frame, colors, lang: args.lang, logo: { src: logo.src, width: logo.width, height: logo.height, maxScale: logo.maxScale }, tagline: args.brand.tokens.tagline, cta: args.cta, website };
+  const fonts: FontNeed[] = [{ lang: "en", weight: 700, text: website }];
+  let element;
+  if (args.type === "promotional") {
+    if (!args.offerLines.some((l) => l.kind === "offer_price" || l.kind === "group_price")) throw new AppError("OUTRO_NEEDS_OFFER", "The promotional outro needs a price or group-buy offer in the brief.", 422);
+    element = createElement(PromotionalOutro, { ...common, offer: args.offerLines });
+    fonts.push({ lang: args.lang, weight: 700, text: args.cta }, ...args.offerLines.map((l) => ({ lang: "en" as const, weight: 700, text: l.text })));
+  } else if (args.type === "product") {
+    const asset = args.product ? getAsset(args.product.assetId) : undefined;
+    if (!asset || !args.product) throw new AppError("OUTRO_NEEDS_PRODUCT", "The product outro needs a product photo.", 422);
+    element = createElement(ProductOutro, { ...common, product: { src: pathToFileURL(absolutePath(asset)).href, width: asset.width!, height: asset.height! }, productName: args.product.name, price: args.product.price });
+    fonts.push({ lang: args.lang, weight: 700, text: args.cta }, { lang: "en", weight: 700, text: args.product.name + (args.product.price ?? "") });
+  } else {
+    element = createElement(MinimalOutro, common);
+  }
+  await renderer.render({ width: frame.width, height: frame.height, css: "", bodyHtml: renderToStaticMarkup(element), fonts, outFile: args.outFile });
+  return { file: args.outFile, inputHash: sha256(JSON.stringify({ v: 1, type: args.type, frame, cta: args.cta, offer: args.offerLines, product: args.product, logo: logo.asset.sha256 })) };
 }
 
 export const PRODUCT_CANVAS_SCALE = 1.12;

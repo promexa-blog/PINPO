@@ -19,10 +19,17 @@ interface Draft {
   scenes: SceneEdit[];
 }
 
-const MODELS = [
-  { id: "wan-3.0", label: "Wan 3.0 — balanced (default)" },
-  { id: "minimax-h3-max-turbo", label: "MiniMax H3 Max Turbo — cheapest" },
-] as const;
+interface ModelInfo {
+  id: VersionSettings["modelId"];
+  label: string;
+  summary: string;
+  resolutions: VersionSettings["resolution"][];
+  aspects: string[];
+  audio: "toggle" | "always" | "none";
+  references: { max: number } | null;
+  notes: string | null;
+}
+const RES_LABEL: Record<string, string> = { "480p": "480p — draft", "720p": "720p — standard", "1080p": "1080p — high" };
 const CAMERAS = ["static", "slow push-in", "pull-out", "orbit", "pan", "top-down", "handheld", "macro"] as const;
 const LIGHTING = ["soft studio", "natural daylight", "golden hour", "moody low-key", "high-key bright"] as const;
 const TRANSITIONS = ["cut", "crossfade", "dip_white", "dip_primary", "slide"] as const;
@@ -38,6 +45,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
   const [save, setSave] = useState<SaveState>("saved");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const revision = useRef(0);
   const pending = useRef<Partial<Draft> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +65,8 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
     let alive = true;
     void (async () => {
       try {
+        const m = await api<{ models: ModelInfo[] }>("/api/models");
+        if (alive) setModels(m.models);
         await load();
       } catch (e) {
         if (alive) setError((e as Error).message);
@@ -101,6 +111,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
   const { brief, settings, finishing } = draft;
   const setBrief = (b: Partial<BriefInput>) => update({ brief: { ...brief, ...b } });
   const platform = PLATFORMS[draft.platform];
+  const model = models.find((m) => m.id === settings.modelId);
   const check = view.check;
 
   async function buildStoryboard(confirm = false) {
@@ -259,6 +270,20 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
               </div>
             </Field>
           </div>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-semibold">Group buy (optional)</summary>
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <Field label="Group price (₹)" htmlFor="g-price">
+                <Input id="g-price" inputMode="decimal" value={brief.offers.groupBuy?.groupPriceInr ?? ""} onChange={(e) => setBrief({ offers: { ...brief.offers, groupBuy: e.target.value ? { groupPriceInr: Number(e.target.value), minBuyers: brief.offers.groupBuy?.minBuyers ?? 5, deadline: brief.offers.groupBuy?.deadline ?? today() } : null } })} />
+              </Field>
+              <Field label="People needed" htmlFor="g-min">
+                <Input id="g-min" type="number" min={2} disabled={!brief.offers.groupBuy} value={brief.offers.groupBuy?.minBuyers ?? ""} onChange={(e) => brief.offers.groupBuy && setBrief({ offers: { ...brief.offers, groupBuy: { ...brief.offers.groupBuy, minBuyers: Number(e.target.value) } } })} />
+              </Field>
+              <Field label="Join by" htmlFor="g-deadline">
+                <Input id="g-deadline" type="date" disabled={!brief.offers.groupBuy} value={brief.offers.groupBuy?.deadline ?? ""} onChange={(e) => brief.offers.groupBuy && setBrief({ offers: { ...brief.offers, groupBuy: { ...brief.offers.groupBuy, deadline: e.target.value } } })} />
+              </Field>
+            </div>
+          </details>
         </Section>
 
         <Section id="creative" title="Call to action and style">
@@ -328,25 +353,50 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                 <option value="fast">Fast</option>
               </Select>
             </Field>
-            <Field label="Video model" htmlFor="s-model">
-              <Select id="s-model" value={settings.modelId} onChange={(e) => update({ settings: { ...settings, modelId: e.target.value as VersionSettings["modelId"], clipAudio: e.target.value === "wan-3.0" ? settings.clipAudio : false } })}>
-                {MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
+            <Field label="Video model" htmlFor="s-model" hint={model?.summary}>
+              <Select
+                id="s-model"
+                value={settings.modelId}
+                onChange={(e) => {
+                  const next = models.find((m) => m.id === e.target.value);
+                  if (!next) return;
+                  update({ settings: { ...settings, modelId: next.id, resolution: next.resolutions.includes(settings.resolution) ? settings.resolution : next.resolutions[next.resolutions.length > 1 ? 1 : 0]!, clipAudio: next.audio === "toggle" ? settings.clipAudio : next.audio === "always" } });
+                }}
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id} disabled={!m.aspects.includes(platform.aspect)}>
                     {m.label}
+                    {!m.aspects.includes(platform.aspect) ? ` (no ${platform.aspect})` : ""}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Quality" htmlFor="s-res">
+            <Field label="Quality" htmlFor="s-res" hint={model?.notes ?? undefined}>
               <Select id="s-res" value={settings.resolution} onChange={(e) => update({ settings: { ...settings, resolution: e.target.value as VersionSettings["resolution"] } })}>
-                <option value="480p">480p — draft</option>
-                <option value="720p">720p — standard</option>
-                <option value="1080p">1080p — high</option>
+                {(model?.resolutions ?? ["720p"]).map((r) => (
+                  <option key={r} value={r}>
+                    {RES_LABEL[r]}
+                  </option>
+                ))}
               </Select>
             </Field>
             <div className="self-end">
-              <Checkbox id="s-audio" checked={settings.clipAudio} onChange={(v) => update({ settings: { ...settings, clipAudio: v } })} label="Keep AI scene sound" hint={settings.modelId === "wan-3.0" ? "Wan 3.0 can generate sound." : "This model has no sound option."} />
+              <Checkbox
+                id="s-audio"
+                checked={settings.clipAudio}
+                onChange={(v) => update({ settings: { ...settings, clipAudio: v } })}
+                label="Keep AI scene sound"
+                hint={model?.audio === "toggle" ? `${model.label} can generate sound.` : model?.audio === "always" ? `${model.label} always generates sound; untick to mute it.` : "This model has no sound; your music is used."}
+              />
             </div>
+            <Field label="Outro" htmlFor="s-outro" hint="Every outro uses the official logo and demandmesh.shop.">
+              <Select id="s-outro" value={finishing.outroType} onChange={(e) => update({ finishing: { ...finishing, outroType: e.target.value as Finishing["outroType"] } })}>
+                <option value="standard">Standard — logo, tagline, call to action</option>
+                <option value="promotional">Promotional — repeats the offer</option>
+                <option value="product">Product — your product photo and price</option>
+                <option value="minimal">Minimal — logo only</option>
+              </Select>
+            </Field>
           </div>
           <div className="mt-4 grid gap-3">
             <p className="text-sm font-semibold">Music</p>

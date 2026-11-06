@@ -2,7 +2,7 @@ import "../guard";
 import type { SceneEdit } from "@/lib/version";
 import { PLATFORMS } from "@/lib/platforms";
 import { getModel, requestDuration } from "../models/registry";
-import { getMasterBrand } from "../brand/master";
+import { getMasterBrand, readBundledTokens } from "../brand/master";
 import { getTemplate } from "./templates";
 import { buildStoryboard, OUTRO_S, OUTRO_TRANSITION_S, type ClaimRecord, type Storyboard } from "./storyboard";
 import { computeTimeline, type Timeline } from "./timeline";
@@ -44,7 +44,13 @@ export function storyboardFor(v: VersionRow): Storyboard {
     lengthS: settings.lengthS,
     pacing: v.pacing,
     model: getModel(settings.modelId),
+    brandLines: brandLines(),
   });
+}
+
+export function brandLines(): { tagline: string; groupBuyLine: string } {
+  const t = getMasterBrand()?.tokens;
+  return { tagline: t?.tagline ?? "Where demands connects.", groupBuyLine: t?.groupBuyLine ?? readBundledTokens().groupBuyLine ?? "" };
 }
 
 /** Hash of the generated content of a scene, to detect user edits (plan test S3). */
@@ -151,10 +157,13 @@ export function checkDraft(versionId: string): DraftCheck {
       if (!s.prompt.trim()) add("fail", "prompt", `Scene ${i + 1} needs a video prompt.`);
       if (requestDuration(model, s.durationS) < s.durationS - 0.05) add("fail", "duration", `Scene ${i + 1} is longer than ${model.label} can generate (${model.durations.max}s).`);
     }
-    if (s.sceneType === "ai_reference") add("fail", "scene_type", `Scene ${i + 1}: reference-image scenes arrive with the expanded model registry.`);
+    if (s.sceneType === "ai_reference" && !model.endpoints.ref) add("fail", "scene_type", `Scene ${i + 1}: ${model.label} can't use reference images — rebuild the storyboard or pick Seedance, MiniMax or Gemini.`);
+    if (s.sceneType === "ai_from_product" && !model.endpoints.i2v) add("fail", "scene_type", `Scene ${i + 1}: ${model.label} can't start from a photo.`);
   });
   const brand = getMasterBrand();
   const outroText = brief.cta[finishing.outroLang] ?? "";
+  if (finishing.outroType === "promotional" && !brief.offers.priceInr && !brief.offers.groupBuy) add("fail", "outro", "The Promotional outro needs a price or group-buy offer — add one in Price & offer, or pick another outro.");
+  if (finishing.outroType === "product" && !brief.product.imageAssetIds.length) add("fail", "outro", "The Product outro needs a product photo.");
   if (!outroText) add("fail", "cta_presence", `Add the call to action in the outro language.`);
   const items = complianceItems({
     brief,
@@ -162,9 +171,12 @@ export function checkDraft(versionId: string): DraftCheck {
     outroCta: { lang: finishing.outroLang, text: outroText },
     today: indiaToday(),
     approvedCtas: brand?.tokens.approvedCtas ?? {},
+    brandLines: brandLines(),
   });
   for (const it of items) if (it.status === "fail") blocking.push(it);
   else if (it.status !== "pass") warnings.push(it);
-  const estimate = scenes.length ? estimateCost(scenes.map((s, i) => ({ ...s, position: i })), model, settings.resolution, indiaToday()) : null;
+  if (settings.clipAudio && model.audio === "none") warnings.push({ check: "audio", method: "automated", status: "warn", message: `${model.label} can't generate sound; scenes will use your music only.` });
+  if (model.pricing.estimate) warnings.push({ check: "cost", method: "automated", status: "warn", message: `${model.label} is billed by tokens; the estimate uses fal's approximate per-second price.` });
+  const estimate = scenes.length ? estimateCost(scenes.map((s, i) => ({ ...s, position: i })), model, settings.resolution, indiaToday(), settings.clipAudio && model.audio === "toggle") : null;
   return { ok: blocking.length === 0, blocking, warnings, timeline, estimate };
 }

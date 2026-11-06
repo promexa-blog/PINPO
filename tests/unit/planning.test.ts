@@ -9,7 +9,9 @@ import { loadBundledTemplates } from "@/server/planning/templates";
 import { estimateCost } from "@/server/planning/estimate";
 import type { Pacing } from "@/server/planning/creative";
 
-const template = loadBundledTemplates().find((t) => t.key === "product_showcase")!;
+const TEMPLATES = loadBundledTemplates();
+const template = TEMPLATES.find((t) => t.key === "product_showcase")!;
+const BRAND_LINES = { tagline: "Where demands connects.", groupBuyLine: "Buy it now, or buy together for less" };
 const IMG = "ast_0123456789abcdef0123";
 
 export function makeBrief(over: Partial<BriefInput> = {}): BriefInput {
@@ -18,7 +20,7 @@ export function makeBrief(over: Partial<BriefInput> = {}): BriefInput {
     audience: { who: "a young office worker in Kochi" },
     campaign: { objective: "sales", platform: "instagram_reels" },
     claims: [],
-    offers: { priceInr: 899, mrpInr: 1299, confirmedOn: "2026-11-06" },
+    offers: { priceInr: 899, mrpInr: 1299, confirmedOn: "2026-11-06", groupBuy: { groupPriceInr: 799, minBuyers: 5, deadline: "2026-11-30" } },
     cta: { en: "Shop now on demandmesh.shop" },
     creative: { direction: "", tone: "friendly", style: "lifestyle" },
     languages: ["en"],
@@ -85,6 +87,29 @@ describe("model registry (U1)", () => {
   });
 });
 
+describe("expanded registry (U1)", () => {
+  const base: NormalizedInput = { mode: "t2v", prompt: "A lunch box on a desk", durationS: 4.2, resolution: "720p", aspect: "9:16", audio: true, seed: 42 };
+  const ref = ["https://v3b.fal.media/files/a.png", "https://v3b.fal.media/files/b.png"];
+  it("Kling v3 Pro: string durations, negative prompt, no seed/resolution", () => {
+    const i = buildValidatedInput(MODELS["kling-v3-pro"], base);
+    expect(i).toMatchObject({ duration: "5", generate_audio: true, aspect_ratio: "9:16" });
+    expect(i).not.toHaveProperty("seed");
+    expect(i).not.toHaveProperty("resolution");
+  });
+  it("Seedance 2.0 Mini: reference images + string duration ≥ 4", () => {
+    const i = buildValidatedInput(MODELS["seedance-2.0-mini"], { ...base, mode: "ref", durationS: 2, referenceImageUrls: ref });
+    expect(i).toMatchObject({ duration: "4", image_urls: ref, resolution: "720p" });
+  });
+  it("Gemini Omni Flash v1.1: 3–10s, 16:9/9:16 only", () => {
+    expect(buildValidatedInput(MODELS["gemini-omni-flash-1.1"], { ...base, durationS: 14 })).toMatchObject({ duration: 10 });
+    expect(() => buildValidatedInput(MODELS["gemini-omni-flash-1.1"], { ...base, aspect: "1:1" })).toThrow(/16:9 and 9:16/);
+  });
+  it("MiniMax H3 reference mode has its own (higher) price table", () => {
+    expect(pricePerSecond(MODELS["minimax-h3-max-turbo"], "720p", "2026-11-20", "ref")).toBe(0.08);
+    expect(pricePerSecond(MODELS["kling-v3-pro"], "720p", "2026-11-20", "t2v", true)).toBeCloseTo(0.168, 6);
+  });
+});
+
 describe("timeline (U2 property test)", () => {
   it("total always equals target for random scene sets", () => {
     let seed = 7;
@@ -111,18 +136,20 @@ describe("timeline (U2 property test)", () => {
 
 describe("storyboard (S1–S4, F1, F2, U3)", () => {
   const platforms = Object.keys(PLATFORMS) as PlatformKey[];
-  it("hits every template length on every platform and model, using only allowed durations (S1/U3)", () => {
+  it("hits every length for every template × platform × model, using only allowed durations (S1/U3)", () => {
+    for (const tpl of TEMPLATES)
     for (const model of Object.values(MODELS)) {
       for (const platform of platforms) {
         for (const lengthS of PLATFORMS[platform].lengths) {
           for (const pacing of ["calm", "standard", "fast"] as Pacing[]) {
-            const sb = buildStoryboard({ template, brief: makeBrief(), claims: CLAIMS, platform, lengthS, pacing, model });
+            const sb = buildStoryboard({ template: tpl, brief: makeBrief(), claims: CLAIMS, platform, lengthS, pacing, model, brandLines: BRAND_LINES });
             expect(Math.abs(sb.timeline.totalS - lengthS)).toBeLessThanOrEqual(0.1);
             for (const s of sb.scenes) {
               expect(s.durationS).toBeGreaterThanOrEqual(2);
               if (s.sceneType !== "product_original") expect(requestDuration(model, s.durationS)).toBeLessThanOrEqual(model.durations.max);
             }
-            expect(sb.blocked).toBe(false);
+            expect(sb.blocked, `${tpl.key}/${model.id}/${platform}/${lengthS}/${pacing}: ${sb.placeholders.map((x) => x.message).join("; ")}`).toBe(false);
+            if (model.references) expect(sb.scenes.some((x) => x.sceneType === "ai_from_product")).toBe(false);
           }
         }
       }

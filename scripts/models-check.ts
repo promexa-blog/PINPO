@@ -15,9 +15,17 @@ const fail = (m: string) => {
 };
 
 async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { "User-Agent": "pinpo-models-check" } });
-  if (!res.ok) throw new Error(`${res.status} for ${url}`);
-  return res.json();
+  // The catalog API rate-limits bursts (Phase 0): back off on 429 instead of failing.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { "User-Agent": "pinpo-models-check" } });
+    if (res.status === 429 && attempt < 6) {
+      const wait = Number(res.headers.get("retry-after") ?? 0) * 1000 || 5000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) throw new Error(`${res.status} for ${url}`);
+    return res.json();
+  }
 }
 
 async function getText(url: string): Promise<string> {
@@ -34,7 +42,7 @@ async function inputSchema(endpoint: string): Promise<Schema> {
 }
 
 async function checkEndpoint(model: ModelSpec, mode: GenMode) {
-  const endpoint = model.endpoints[mode];
+  const endpoint = model.endpoints[mode]!;
   console.log(`• ${endpoint}`);
   const live = await inputSchema(endpoint);
   const ours = model.inputSchema[mode] as unknown as { shape: Record<string, unknown> };
@@ -53,7 +61,7 @@ async function checkEndpoint(model: ModelSpec, mode: GenMode) {
 }
 
 async function checkCatalog(model: ModelSpec) {
-  for (const endpoint of Object.values(model.endpoints)) {
+  for (const endpoint of Object.values(model.endpoints).filter((e): e is string => !!e)) {
     const data = (await getJson(`https://api.fal.ai/v1/models?endpoint_id=${encodeURIComponent(endpoint)}`)) as { models: { metadata: { status: string; license_type?: string; retires_at?: string | null } }[] };
     const meta = data.models[0]?.metadata;
     if (!meta) {
@@ -68,19 +76,28 @@ async function checkCatalog(model: ModelSpec) {
 }
 
 async function checkPrice(model: ModelSpec) {
-  const text = await getText(`https://fal.ai/models/${model.endpoints.t2v}/llms.txt`);
-  const current = model.pricing.periods[model.pricing.periods.length - 1]!;
-  for (const [res, usd] of Object.entries(current.perSecond)) {
-    const needle = `$${usd}`;
-    if (!text.includes(needle) && !text.includes(`$${usd.toFixed(3)}`)) fail(`${model.id}: ${res} price ${needle}/s not found in fal pricing text — re-verify`);
+  const tables: [string, { perSecond: Partial<Record<string, number>>; audioPerSecond?: Partial<Record<string, number>> }][] = [
+    ["t2v", model.pricing.periods[model.pricing.periods.length - 1]!],
+  ];
+  for (const [mode, periods] of Object.entries(model.pricing.modes ?? {})) if (periods?.length) tables.push([mode, periods[periods.length - 1]!]);
+  for (const [mode, table] of tables) {
+    const endpoint = model.endpoints[mode as GenMode] ?? model.endpoints.t2v!;
+    const text = await getText(`https://fal.ai/models/${endpoint}/llms.txt`);
+    const has = (usd: number) => [String(usd), usd.toFixed(2), usd.toFixed(3), usd.toFixed(4)].some((v) => text.includes(`$${v}`));
+    for (const [res, usd] of Object.entries(table.perSecond)) {
+      if (usd === undefined) continue;
+      if (!has(usd)) fail(`${model.id} (${mode}): ${res} price $${usd}/s not found in fal pricing text — re-verify`);
+      const audio = table.audioPerSecond?.[res];
+      if (audio !== undefined && !has(Math.round((usd + audio) * 10_000) / 10_000)) fail(`${model.id} (${mode}): ${res} price with audio not found — re-verify`);
+    }
   }
-  note(`prices checked against llms.txt`);
+  note(`prices checked against llms.txt${model.pricing.estimate ? " (token-billed; per-second figures are fal's approximations)" : ""}`);
 }
 
 async function main() {
   for (const model of Object.values(MODELS)) {
     console.log(`\n${model.label} (verified ${model.verifiedAt})`);
-    for (const mode of Object.keys(model.endpoints) as GenMode[]) await checkEndpoint(model, mode);
+    for (const mode of (Object.keys(model.endpoints) as GenMode[]).filter((m) => model.endpoints[m])) await checkEndpoint(model, mode);
     await checkCatalog(model);
     await checkPrice(model);
   }

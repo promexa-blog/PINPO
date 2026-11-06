@@ -3,6 +3,7 @@ import type { BriefInput, Lang } from "@/lib/brief";
 import type { SceneEdit } from "@/lib/version";
 import { classify, evaluateClaim, isEndorsementPrompt, type ClaimLike } from "../../brief/claims";
 import { offerIssues, offerLine } from "../../brief/offers";
+import { groupBuyLines } from "../../planning/storyboard";
 
 /**
  * Core advertising compliance over the ACTUAL overlay text (plan §9 [v2.2]): every line must trace
@@ -27,6 +28,7 @@ export interface ComplianceInput {
   outroCta: { lang: Lang; text: string };
   today: string;
   approvedCtas: Record<string, string[]>;
+  brandLines?: { tagline: string; groupBuyLine: string };
 }
 
 export function complianceItems(input: ComplianceInput): QaItem[] {
@@ -39,7 +41,9 @@ export function complianceItems(input: ComplianceInput): QaItem[] {
     offer_mrp: offer?.mrp ?? null,
     offer_discount: offer?.discount ?? null,
     offer_validity: offer?.validUntil ?? null,
+    ...Object.fromEntries(groupBuyLines(brief).map((l) => [l.kind, l.text])),
   };
+  if (!brief.offers.groupBuy) Object.assign(expectedOffer, { group_price: null, group_min: null, group_deadline: null });
 
   let claimFail = 0;
   let claimReview = 0;
@@ -56,6 +60,14 @@ export function complianceItems(input: ComplianceInput): QaItem[] {
         if (line.kind === "placeholder") {
           claimFail++;
           claimMessages.push(`${where}: placeholder "${line.text}" must be replaced.`);
+          continue;
+        }
+        if (line.kind === "tagline" || line.kind === "brand_line") {
+          const expected = line.kind === "tagline" ? input.brandLines?.tagline : input.brandLines?.groupBuyLine;
+          if (line.text !== expected) {
+            claimFail++;
+            claimMessages.push(`${where}: "${line.text}" isn't the approved DemandMesh line.`);
+          }
           continue;
         }
         if (line.kind === "product_name") {

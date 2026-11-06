@@ -1,0 +1,100 @@
+{
+  "key": "group_buy",
+  "name": "Group buy",
+  "description": "Buy together for less: show the product, how the group price drops when enough people join, the deadline, and how to join.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "promotional",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "hook",
+      "label": "Buy together for less",
+      "weight": 1.0,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "Friends or neighbours deciding to buy together.",
+      "overlay": {
+        "source": "brand_line",
+        "layout": "centered",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "A small group of friends in {setting} looking at a phone together, excited to buy something together. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "product",
+      "label": "Product",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The real product being bought together.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "group_price",
+      "label": "Group price",
+      "weight": 1.2,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The group price and how many buyers unlock it — from the brief only.",
+      "overlay": {
+        "source": "group_buy",
+        "layout": "corner_badge",
+        "motion": "scale-in"
+      },
+      "productMotion": "parallax"
+    },
+    {
+      "role": "benefit",
+      "label": "Benefit",
+      "weight": 1.0,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 30,
+      "visualDirection": "The product in use.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} using {appearance} in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "cta",
+      "label": "Join the group buy",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Deadline and call to action.",
+      "overlay": {
+        "source": "cta",
+        "layout": "centered",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

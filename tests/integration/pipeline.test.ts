@@ -35,6 +35,9 @@ const stopWorker = async (w: ChildProcess | null, signal: NodeJS.Signals = "SIGT
   w.kill(signal);
   await done;
 };
+const ensureWorker = () => {
+  if (!worker || worker.exitCode !== null || worker.signalCode !== null) worker = startWorker();
+};
 const waitFor = async (fn: () => boolean, ms: number, what: string) => {
   const end = Date.now() + ms;
   while (Date.now() < end) {
@@ -45,8 +48,8 @@ const waitFor = async (fn: () => boolean, ms: number, what: string) => {
   throw new Error(`Timed out waiting for ${what}.\nJobs: ${JSON.stringify(jobs)}\nWorker log tail:\n${logs.join("").slice(-3000)}`);
 };
 
-async function makeAd(name: string, promptMarker = "") {
-  const { versionId } = createAd({ name, templateKey: "product_showcase", platform: "instagram_reels" });
+async function makeAd(name: string, promptMarker = "", opts: { templateKey?: string; modelId?: "seedance-2.0-mini"; outro?: "promotional"; lengthS?: 30 } = {}) {
+  const { versionId } = createAd({ name, templateKey: opts.templateKey ?? "product_showcase", platform: "instagram_reels" });
   const png = await sharp({ create: { width: 900, height: 1200, channels: 3, background: "#b03a2e" } })
     .composite([{ input: await sharp({ create: { width: 500, height: 300, channels: 3, background: "#1b2631" } }).png().toBuffer(), left: 200, top: 450 }])
     .png()
@@ -60,7 +63,7 @@ async function makeAd(name: string, promptMarker = "") {
       ...brief,
       product: { name: "Steel Lunch Box", category: "home_kitchen", appearance: "a brushed stainless-steel three-tier lunch box with a matte black clip handle", imageAssetIds: [product.id] },
       audience: { who: "a young office worker in Kochi", location: "Kerala, India" },
-      offers: { priceInr: 899, mrpInr: 1299, stockConfirmed: false, confirmedOn: new Date().toISOString().slice(0, 10) },
+      offers: { priceInr: 899, mrpInr: 1299, stockConfirmed: false, confirmedOn: new Date().toISOString().slice(0, 10), ...(opts.templateKey === "group_buy" ? { groupBuy: { groupPriceInr: 799, minBuyers: 5, deadline: "2099-12-31" } } : {}) },
       creative: { direction: promptMarker, tone: "friendly", style: "lifestyle" },
       claims: [
         { language: "en", text: "Three separate tiers keep food apart", confirmed: true, attested: false, testimonialConsent: false },
@@ -68,6 +71,12 @@ async function makeAd(name: string, promptMarker = "") {
       ],
     },
   });
+  if (opts.modelId || opts.outro || opts.lengthS) {
+    const v2 = requireVersion(versionId);
+    const settings = JSON.parse(v2.settings_json);
+    const finishing = JSON.parse(v2.finishing_json);
+    patchDraft(versionId, { revision: v2.revision, settings: { ...settings, ...(opts.modelId ? { modelId: opts.modelId } : {}), ...(opts.lengthS ? { lengthS: opts.lengthS } : {}) }, finishing: { ...finishing, ...(opts.outro ? { outroType: opts.outro } : {}) } });
+  }
   const sb = applyStoryboard(versionId, true);
   expect(sb.applied).toBe(true);
   expect(sb.storyboard.blocked).toBe(false);
@@ -139,7 +148,25 @@ describe("vertical slice pipeline (mock fal)", () => {
     expect(cost.confirmed).toBeNull();
   }, 300_000);
 
+  it("produces a group-buy ad with reference-image scenes and the promotional outro (Seedance ref mode)", async () => {
+    ensureWorker();
+    const versionId = await makeAd("groupbuy", "", { templateKey: "group_buy", modelId: "seedance-2.0-mini", outro: "promotional", lengthS: 30 });
+    const scenes = db().prepare("SELECT scene_type, overlay_json FROM scenes WHERE version_id = ?").all(versionId) as { scene_type: string; overlay_json: string }[];
+    expect(scenes.some((s) => s.scene_type === "ai_reference")).toBe(true);
+    expect(scenes.map((s) => s.overlay_json).join()).toContain("Group price when 5 people join");
+    expect(checkDraft(versionId).blocking).toEqual([]);
+    await startGenerate(versionId);
+    await waitFor(() => ["ready", "failed"].includes(requireVersion(versionId).status), 240_000, "group-buy version");
+    expect(requireVersion(versionId).error_message).toBeNull();
+    const jobs = db().prepare("SELECT fal_endpoint, result_json FROM jobs WHERE version_id = ? AND type = 'scene_generate' AND fal_endpoint IS NOT NULL").all(versionId) as { fal_endpoint: string; result_json: string }[];
+    expect(jobs.some((j) => j.fal_endpoint === "bytedance/seedance-2.0/mini/reference-to-video")).toBe(true);
+    const items = getItems(versionId);
+    expect(items.filter((i) => i.status === "fail")).toEqual([]);
+    expect(items.find((i) => i.check === "end_card_correctness")?.message).toMatch(/Promotional/);
+  }, 300_000);
+
   it("retries a failing fal run and records failed-attempt exposure (I9, C3)", async () => {
+    ensureWorker();
     const versionId = await makeAd("retry", "[[mock:fail2]]");
     await startGenerate(versionId);
     await waitFor(() => ["ready", "failed"].includes(requireVersion(versionId).status), 240_000, "retry version");
@@ -153,6 +180,7 @@ describe("vertical slice pipeline (mock fal)", () => {
   }, 300_000);
 
   it("fails fast on content policy without retrying (I10)", async () => {
+    ensureWorker();
     const versionId = await makeAd("policy", "[[mock:policy]]");
     await startGenerate(versionId);
     await waitFor(() => requireVersion(versionId).status === "failed", 120_000, "policy failure");
@@ -163,6 +191,7 @@ describe("vertical slice pipeline (mock fal)", () => {
   }, 180_000);
 
   it("cancels a running version within seconds (I15)", async () => {
+    ensureWorker();
     const versionId = await makeAd("cancel");
     await startGenerate(versionId);
     await waitFor(() => !!db().prepare("SELECT 1 FROM jobs WHERE version_id = ? AND stage IN ('in_queue','in_progress')").get(versionId), 60_000, "in-flight job");

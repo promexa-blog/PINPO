@@ -8,7 +8,7 @@ import { newId, now } from "../util";
 import { LAYOUTS, MOTION_PRESETS, PRODUCT_MOTIONS } from "./creative";
 
 export const TemplateScene = z.object({
-  role: z.string().regex(/^[a-z_]+$/),
+  role: z.string().regex(/^[a-z][a-z0-9_]*$/),
   label: z.string(),
   weight: z.number().positive(),
   sceneType: z.enum(["product_original", "ai_from_product", "ai_reference", "ai_scene"]),
@@ -18,7 +18,7 @@ export const TemplateScene = z.object({
   promptScaffold: z.string().optional(),
   productMotion: z.enum(PRODUCT_MOTIONS).optional(),
   overlay: z.object({
-    source: z.string().regex(/^(product_name|claim:\d|offer_or_cta|cta|offer|tagline|group_buy)$/),
+    source: z.string().regex(/^(product_name|claim:\d|offer_or_cta|cta|offer|tagline|brand_line|group_buy)$/),
     layout: z.enum(LAYOUTS),
     motion: z.enum(MOTION_PRESETS),
   }),

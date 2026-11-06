@@ -11,7 +11,7 @@ type Lang = "en" | "ml" | "hi";
 export type LayoutVariant = "lower_third" | "centered" | "side_panel" | "corner_badge" | "split_headline";
 
 export interface OverlayLine {
-  kind: "product_name" | "claim" | "offer_price" | "offer_mrp" | "offer_discount" | "offer_validity" | "cta" | "placeholder";
+  kind: "product_name" | "claim" | "offer_price" | "offer_mrp" | "offer_discount" | "offer_validity" | "group_price" | "group_min" | "group_deadline" | "tagline" | "brand_line" | "cta" | "placeholder";
   text: string;
 }
 
@@ -46,6 +46,22 @@ function Cta({ text, frame, colors, lang, inverse }: { text: string; frame: Fram
 }
 
 function Offer({ lines, frame, colors }: { lines: OverlayLine[]; frame: Frame; colors: BrandColors }) {
+  const group = lines.find((l) => l.kind === "group_price");
+  if (group) {
+    const min = lines.find((l) => l.kind === "group_min");
+    const deadline = lines.find((l) => l.kind === "group_deadline");
+    return (
+      <div data-role="offer" style={{ background: colors.primary, color: colors.white, borderRadius: unit(frame, 2), padding: `${unit(frame, 2)}px ${unit(frame, 3)}px`, fontFamily: FONT_STACK.en }}>
+        <div style={{ fontSize: px(frame, SCALE.headline), fontWeight: 800, lineHeight: 1.05 }}>{group.text}</div>
+        {min ? <div style={{ marginTop: unit(frame, 1), fontSize: px(frame, SCALE.body), fontWeight: 600, color: colors.secondaryLight }}>{min.text}</div> : null}
+        {deadline ? (
+          <div style={{ marginTop: unit(frame, 1), display: "inline-block", background: colors.secondaryLight, color: colors.primary, borderRadius: 9999, padding: `${unit(frame, 0.6)}px ${unit(frame, 2)}px`, fontSize: px(frame, SCALE.caption), fontWeight: 700 }}>
+            {deadline.text}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   const price = lines.find((l) => l.kind === "offer_price");
   const mrp = lines.find((l) => l.kind === "offer_mrp");
   const discount = lines.find((l) => l.kind === "offer_discount");
@@ -69,10 +85,10 @@ function Offer({ lines, frame, colors }: { lines: OverlayLine[]; frame: Frame; c
 
 export function OverlayLayer({ frame, colors, lang, layout, lines }: { frame: Frame; colors: BrandColors; lang: Lang; layout: LayoutVariant; lines: OverlayLine[] }) {
   const box = safeBox(frame);
-  const textLines = lines.filter((l) => l.kind === "product_name" || l.kind === "claim" || l.kind === "placeholder");
+  const textLines = lines.filter((l) => l.kind === "product_name" || l.kind === "claim" || l.kind === "tagline" || l.kind === "brand_line" || l.kind === "placeholder");
   const cta = lines.find((l) => l.kind === "cta");
-  const hasOffer = lines.some((l) => l.kind === "offer_price");
-  const isHeadline = textLines.some((l) => l.kind === "product_name");
+  const hasOffer = lines.some((l) => l.kind === "offer_price" || l.kind === "group_price");
+  const isHeadline = textLines.some((l) => l.kind === "product_name" || l.kind === "tagline" || l.kind === "brand_line");
   const font = FONT_STACK[lang];
   const letterSpacing = lang === "en" ? "-0.01em" : 0;
   const text = (style: CSSProperties) =>
@@ -238,4 +254,67 @@ export function productRect(frame: Frame, product: { width: number; height: numb
   const w = Math.round(product.width * scale);
   const h = Math.round(product.height * scale);
   return { x: Math.round((W - w) / 2), y: Math.round((H - h) / 2 - H * 0.03), w, h, canvasW: Math.round(W), canvasH: Math.round(H) };
+}
+
+function OutroFooter({ frame, colors, lang, logo, cta, website }: Pick<OutroProps, "frame" | "colors" | "lang" | "logo" | "cta" | "website">) {
+  const box = safeBox(frame);
+  const logoW = Math.min(Math.round(logo.width * logo.maxScale), Math.round(box.width * 0.6));
+  const logoH = Math.round((logo.height / logo.width) * logoW);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: unit(frame, 2.5) }}>
+      <Cta text={cta} frame={frame} colors={colors} lang={lang} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels */}
+      <img data-role="logo" src={logo.src} width={logoW} height={logoH} alt="DemandMesh" style={{ display: "block", width: logoW, height: logoH }} />
+      <div data-role="website" style={{ fontFamily: FONT_STACK.en, color: colors.primary, fontSize: px(frame, SCALE.body), fontWeight: 700 }}>
+        {website}
+      </div>
+    </div>
+  );
+}
+
+/** Promotional outro (plan §6): offer badge from brief values only, CTA, logo, website. */
+export function PromotionalOutro(props: OutroProps & { offer: OverlayLine[] }) {
+  const { frame, colors } = props;
+  return (
+    <div style={abs({ inset: 0, background: colors.surface, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: unit(frame, 4) })}>
+      <Offer lines={props.offer} frame={frame} colors={colors} />
+      <OutroFooter {...props} />
+    </div>
+  );
+}
+
+/** Product-specific outro: the ORIGINAL product photo (never AI), its name, price if provided. */
+export function ProductOutro(props: OutroProps & { product: { src: string; width: number; height: number }; productName: string; price: string | null }) {
+  const { frame, colors, product } = props;
+  const box = safeBox(frame);
+  const maxW = box.width * 0.6;
+  const maxH = box.height * 0.36;
+  const scale = Math.min(maxW / product.width, maxH / product.height, 1.25);
+  const w = Math.round(product.width * scale);
+  const h = Math.round(product.height * scale);
+  return (
+    <div style={abs({ inset: 0, background: colors.white, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: unit(frame, 2.5) })}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- exact original product pixels */}
+      <img data-role="product" src={product.src} width={w} height={h} alt="" style={{ display: "block", width: w, height: h }} />
+      <div style={{ fontFamily: FONT_STACK.en, fontSize: fitSize(px(frame, SCALE.headline), props.productName, 18), fontWeight: 700, color: colors.primary, textAlign: "center", maxWidth: box.width }}>{props.productName}</div>
+      {props.price ? <div style={{ fontFamily: FONT_STACK.en, fontSize: px(frame, SCALE.subheadline), fontWeight: 700, color: colors.secondary }}>{props.price}</div> : null}
+      <OutroFooter {...props} />
+    </div>
+  );
+}
+
+/** Minimal logo outro: logo reveal + website on white (inverse only once an official inverse logo exists). */
+export function MinimalOutro({ frame, colors, logo, website }: OutroProps) {
+  const box = safeBox(frame);
+  const logoW = Math.min(Math.round(logo.width * logo.maxScale), Math.round(box.width * 0.7));
+  const logoH = Math.round((logo.height / logo.width) * logoW);
+  return (
+    <div style={abs({ inset: 0, background: colors.white, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: unit(frame, 3) })}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- official logo file, exact pixels */}
+      <img data-role="logo" src={logo.src} width={logoW} height={logoH} alt="DemandMesh" style={{ display: "block", width: logoW, height: logoH }} />
+      <div data-role="website" style={{ fontFamily: FONT_STACK.en, color: colors.primary, fontSize: px(frame, SCALE.body), fontWeight: 700 }}>
+        {website}
+      </div>
+    </div>
+  );
 }

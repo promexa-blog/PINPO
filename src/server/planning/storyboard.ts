@@ -3,7 +3,7 @@ import type { BriefInput, Lang } from "@/lib/brief";
 import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
 import type { ModelSpec } from "../models/registry";
 import { evaluateClaim, isEndorsementPrompt } from "../brief/claims";
-import { offerLine } from "../brief/offers";
+import { offerLine, formatInr, formatDate } from "../brief/offers";
 import { computeTimeline, sceneBudget, type Timeline } from "./timeline";
 import { allocateDurations } from "./scenes";
 import {
@@ -25,7 +25,7 @@ import type { TemplateDef, TemplateSceneDef } from "./templates";
 
 export type SceneType = TemplateSceneDef["sceneType"];
 
-export type OverlayLineKind = "product_name" | "claim" | "offer_price" | "offer_mrp" | "offer_discount" | "offer_validity" | "cta" | "placeholder";
+export type OverlayLineKind = "product_name" | "claim" | "offer_price" | "offer_mrp" | "offer_discount" | "offer_validity" | "group_price" | "group_min" | "group_deadline" | "tagline" | "brand_line" | "cta" | "placeholder";
 export interface OverlayLine {
   kind: OverlayLineKind;
   text: string;
@@ -73,6 +73,8 @@ export interface StoryboardInput {
   pacing: Pacing;
   model: ModelSpec;
   outroS?: number;
+  /** Brand copy from the master brand tokens (tagline, group-buy line). */
+  brandLines?: { tagline: string; groupBuyLine: string };
 }
 
 export interface Placeholder {
@@ -133,17 +135,19 @@ export function buildStoryboard(input: StoryboardInput): Storyboard {
     const c = controls[i]!;
     const byLang: SceneOverlay["byLang"] = {};
     for (const lang of brief.languages) {
-      const lines = overlayLines(r.overlay.source, lang, { brief, usable, offer });
+      const lines = overlayLines(r.overlay.source, lang, { brief, usable, offer, brandLines: input.brandLines });
       for (const l of lines) if (l.kind === "placeholder") placeholders.push({ scene: i + 1, lang, message: l.text });
       byLang[lang] = lines;
     }
-    const prompt = r.sceneType === "product_original" ? "" : buildPrompt(r, c, brief);
+    // Plan §7: reference-capable endpoints first for AI product scenes.
+    const sceneType: SceneType = r.sceneType === "ai_from_product" && model.references && model.endpoints.ref && brief.product.imageAssetIds.length ? "ai_reference" : r.sceneType;
+    const prompt = sceneType === "product_original" ? "" : buildPrompt({ ...r, sceneType }, c, brief, model);
     if (prompt && isEndorsementPrompt(prompt)) throw new Error(`Scene ${i + 1} prompt asks for an endorsement or review, which isn't allowed.`);
     return {
       position: i,
       role: r.role,
       label: r.label,
-      sceneType: r.sceneType,
+      sceneType,
       showsProduct: r.showsProduct,
       durationS: durations[i]!,
       visualDirection: r.visualDirection,
@@ -166,7 +170,7 @@ export function buildStoryboard(input: StoryboardInput): Storyboard {
 function overlayLines(
   source: string,
   lang: Lang,
-  ctx: { brief: BriefInput; usable: Record<Lang, ClaimRecord[]>; offer: ReturnType<typeof offerLine> },
+  ctx: { brief: BriefInput; usable: Record<Lang, ClaimRecord[]>; offer: ReturnType<typeof offerLine>; brandLines?: { tagline: string; groupBuyLine: string } },
 ): OverlayLine[] {
   const { brief, usable, offer } = ctx;
   const cta = (): OverlayLine => {
@@ -182,6 +186,12 @@ function overlayLines(
     return out;
   };
   if (source === "product_name") return [{ kind: "product_name", text: brief.product.name }];
+  if (source === "tagline") return ctx.brandLines ? [{ kind: "tagline", text: ctx.brandLines.tagline }] : [];
+  if (source === "brand_line") return ctx.brandLines ? [{ kind: "brand_line", text: ctx.brandLines.groupBuyLine }] : [];
+  if (source === "group_buy") {
+    const g = groupBuyLines(brief);
+    return g.length ? [...g, cta()] : [{ kind: "placeholder", text: "[Add the group price, minimum buyers and deadline in Price & offer]" }];
+  }
   if (source === "cta") return [cta()];
   if (source === "offer") return offerLines();
   if (source === "offer_or_cta") return [...offerLines(), cta()];
@@ -195,7 +205,18 @@ function overlayLines(
   return [];
 }
 
-function buildPrompt(r: TemplateSceneDef, c: CreativeControls, brief: BriefInput): string {
+/** Group-buy lines generated only from brief values (plan §4, §9). */
+export function groupBuyLines(brief: BriefInput): OverlayLine[] {
+  const g = brief.offers.groupBuy;
+  if (!g) return [];
+  return [
+    { kind: "group_price", text: formatInr(g.groupPriceInr) },
+    { kind: "group_min", text: `Group price when ${g.minBuyers} people join` },
+    { kind: "group_deadline", text: `Join by ${formatDate(g.deadline)}` },
+  ];
+}
+
+function buildPrompt(r: TemplateSceneDef, c: CreativeControls, brief: BriefInput, model: ModelSpec): string {
   const scaffold = r.promptScaffold ?? "{appearance}. {camera}. {lighting}. Set on {setting}. {toneMood}.";
   const filled = scaffold
     .replaceAll("{appearance}", brief.product.appearance)
@@ -206,7 +227,11 @@ function buildPrompt(r: TemplateSceneDef, c: CreativeControls, brief: BriefInput
     .replaceAll("{audienceWho}", brief.audience.who)
     .replaceAll("{categoryNoun}", CATEGORY_NOUN[brief.product.category]);
   const parts = [filled];
-  if (r.showsProduct) parts.push(`The product must look exactly like this: ${brief.product.appearance}. Keep its shape, colour, material, packaging and proportions identical to the start frame.`);
+  if (r.showsProduct && r.sceneType === "ai_reference" && model.references) {
+    const n = Math.min(model.references.max, brief.product.imageAssetIds.length);
+    const tags = Array.from({ length: n }, (_, k) => model.references!.promptTag(k + 1)).join(", ");
+    parts.push(`The product is exactly the one shown in ${tags}: ${brief.product.appearance}. Keep its shape, colour, material, packaging and proportions identical to the reference.`);
+  } else if (r.showsProduct) parts.push(`The product must look exactly like this: ${brief.product.appearance}. Keep its shape, colour, material, packaging and proportions identical to the start frame.`);
   if (brief.creative.direction.trim()) parts.push(`Creative direction: ${brief.creative.direction.trim()}.`);
   parts.push(NO_TEXT_SUFFIX);
   return parts.join(" ").replace(/\s+/g, " ").replace(/\.\./g, ".").trim();

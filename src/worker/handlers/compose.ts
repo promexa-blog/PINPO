@@ -5,7 +5,9 @@ import { db, tx } from "@/server/db";
 import { paths } from "@/server/paths";
 import { PLATFORMS } from "@/lib/platforms";
 import { getMasterBrand } from "@/server/brand/master";
-import { renderOverlay, renderStandardOutro, frameFor, officialLogo, brandColors, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
+import { renderOverlay, renderOutro, frameFor, officialLogo, brandColors, PRODUCT_CANVAS_SCALE } from "@/server/render/brand-render";
+import { offerLine, formatInr } from "@/server/brief/offers";
+import { groupBuyLines } from "@/server/planning/storyboard";
 import { normalizeClip, outroClip, thumbnail, PUSH_IN_ZOOM } from "@/server/media/clips";
 import { buildComposeGraph, type XfadeKind } from "@/server/media/filtergraph";
 import { ffmpeg } from "@/server/media/run";
@@ -15,7 +17,7 @@ import { compareProductRegion, PRODUCT_THRESHOLDS } from "@/server/media/product
 import { absolutePath, getAsset, putFile } from "@/server/storage/assets";
 import { isDiskFullError } from "@/server/storage/disk";
 import { getBrief, getScenes, requireVersion, settingsOf, finishingOf } from "@/server/db/repos/versions";
-import { draftScenes, timelineFor } from "@/server/planning/draft";
+import { draftScenes, timelineFor, brandLines } from "@/server/planning/draft";
 import { OUTRO_S } from "@/server/planning/storyboard";
 import { complianceItems, type QaItem } from "@/server/qa/checks/compliance";
 import { writeReport, refreshQaStatus } from "@/server/qa/reports";
@@ -113,7 +115,22 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
     overlays.push({ file, startS: seg.startS + incoming + 0.1, endS: seg.endS - seg.transitionOutS - 0.05, motion: s.overlay.motion, words: readingWords(lines), scene: i });
   }
   const ctaText = brief.cta[lang] ?? "";
-  const outroPng = await renderStandardOutro({ brand, platform: v.platform, lang, cta: ctaText, outFile: path.join(dir, "outro.png") });
+  const offer = offerLine(brief.offers);
+  const offerLines = [
+    ...groupBuyLines(brief),
+    ...(offer?.price && !brief.offers.groupBuy ? [{ kind: "offer_price" as const, text: offer.price }, ...(offer.mrp ? [{ kind: "offer_mrp" as const, text: offer.mrp }] : []), ...(offer.discount ? [{ kind: "offer_discount" as const, text: offer.discount }] : []), ...(offer.validUntil ? [{ kind: "offer_validity" as const, text: offer.validUntil }] : [])] : []),
+  ];
+  const productId = brief.product.imageAssetIds[0];
+  const outroPng = await renderOutro({
+    brand,
+    platform: v.platform,
+    lang,
+    type: finishing.outroType,
+    cta: ctaText,
+    offerLines,
+    product: productId ? { assetId: productId, name: brief.product.name, price: brief.offers.priceInr ? formatInr(brief.offers.priceInr) : null } : undefined,
+    outFile: path.join(dir, "outro.png"),
+  });
   const outroFile = path.join(dir, "outro.mp4");
   await outroClip(outroPng.file, outroFile, { width: W, height: H, durationS: OUTRO_S }, { signal });
 
@@ -186,7 +203,7 @@ async function compose(ctx: JobContext, versionId: string, dir: string): Promise
   const thumb = await putFile(thumbFile, { kind: "image", mime: "image/jpeg", ext: "jpg", source: "derived", width: 480, provenance: { sourceType: "rendered", commercialUse: "yes", license: "Proprietary – DemandMesh" } });
 
   const technicalItems: QaItem[] = tech.checks.map((c) => ({ check: `technical_${c.key}`, method: "automated", status: c.status, message: c.message, evidence: c.value }));
-  const creative = await creativeItems({ v, scenes, rows, brief, brand, lang, overlays, timeline: tl, music, dir, ctaText, settingsModel: settings.modelId });
+  const creative = await creativeItems({ v, scenes, rows, brief, brand, lang, overlays, timeline: tl, music, dir, ctaText, settingsModel: settings.modelId, outroType: finishing.outroType });
 
   tx(() => {
     writeReport(versionId, "technical", technicalItems);
@@ -212,6 +229,7 @@ async function creativeItems(a: {
   dir: string;
   ctaText: string;
   settingsModel: string;
+  outroType: "standard" | "promotional" | "product" | "minimal";
 }): Promise<QaItem[]> {
   const items: QaItem[] = [];
   const { brand, v } = a;
@@ -258,7 +276,12 @@ async function creativeItems(a: {
   // CTA presence + end card.
   items.push({ check: "cta_presence", method: "automated", status: a.ctaText ? "pass" : "fail", message: a.ctaText ? `CTA "${a.ctaText}" in the outro.` : "No call to action." });
   const outroOk = brand.tokens.website === "demandmesh.shop" && OUTRO_S >= 2.5 && OUTRO_S <= 4;
-  items.push({ check: "end_card_correctness", method: "automated", status: outroOk ? "pass" : "fail", message: `Standard DemandMesh outro: official logo, "demandmesh.shop", ${OUTRO_S}s.` });
+  const outroName = { standard: "Standard", promotional: "Promotional", product: "Product-specific", minimal: "Minimal logo" }[a.outroType];
+  items.push({ check: "end_card_correctness", method: "automated", status: outroOk ? "pass" : "fail", message: `${outroName} DemandMesh outro: official logo, "demandmesh.shop", ${OUTRO_S}s.` });
+  const hasOffer = !!a.brief.offers.priceInr || !!a.brief.offers.groupBuy;
+  if ((a.brief.campaign.objective === "sales" || a.brief.campaign.objective === "group_buy") && hasOffer && a.outroType === "minimal") {
+    items.push({ check: "end_card_correctness", method: "heuristic", status: "warn", message: "This is a sales ad with an offer, but the outro is the minimal logo version — the Promotional outro would repeat the offer." });
+  }
 
   // Product appearance consistency.
   const model = getModel(a.settingsModel);
@@ -288,7 +311,7 @@ async function creativeItems(a: {
   }
 
   // Compliance over the actual on-screen text.
-  items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas }));
+  items.push(...complianceItems({ brief: a.brief, scenes: a.scenes, outroCta: { lang: a.lang, text: a.ctaText }, today: indiaToday(), approvedCtas: brand.tokens.approvedCtas, brandLines: brandLines() }));
 
   // Rights (basic gate; full provenance checks come with Phase 7).
   const used = [...a.rows.map((r) => getAsset(r.clip_asset_id ?? "")), ...a.scenes.map((s) => (s.productAssetId ? getAsset(s.productAssetId) : undefined)), a.music].filter((x): x is NonNullable<typeof x> => !!x);
@@ -305,8 +328,8 @@ async function creativeItems(a: {
 
 /** Words a viewer must read; a price block (price/MRP/discount) counts as a 2-word glance. */
 function readingWords(lines: { kind: string; text: string }[]): number {
-  const text = lines.filter((l) => !l.kind.startsWith("offer_")).map((l) => l.text).join(" ");
-  const offer = lines.some((l) => l.kind === "offer_price") ? 2 : 0;
+  const text = lines.filter((l) => !l.kind.startsWith("offer_") && !l.kind.startsWith("group_")).map((l) => l.text).join(" ");
+  const offer = (lines.some((l) => l.kind === "offer_price") ? 2 : 0) + (lines.some((l) => l.kind === "group_price") ? 5 : 0);
   return (text.trim() ? text.trim().split(/\s+/).length : 0) + offer;
 }
 

@@ -1,0 +1,100 @@
+{
+  "key": "lifestyle",
+  "name": "Lifestyle",
+  "description": "Place the product in an aspirational everyday life moment that matches the audience.",
+  "platforms": [
+    "instagram_reels",
+    "instagram_story",
+    "youtube_shorts",
+    "instagram_feed",
+    "facebook_feed",
+    "youtube_instream"
+  ],
+  "lengths": [
+    15,
+    30,
+    45,
+    60
+  ],
+  "defaultOutro": "minimal",
+  "cta": {
+    "placement": "final_scene_and_outro"
+  },
+  "scenes": [
+    {
+      "role": "mood",
+      "label": "Mood opener",
+      "weight": 1.1,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 15,
+      "visualDirection": "Set the mood and the world of the audience.",
+      "overlay": {
+        "source": "claim:0",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} on an easy, pleasant day in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "daily_life",
+      "label": "Product in daily life",
+      "weight": 1.3,
+      "sceneType": "ai_from_product",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The product naturally part of the routine.",
+      "overlay": {
+        "source": "claim:1",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} naturally using {appearance} as part of their day in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "social",
+      "label": "Social moment",
+      "weight": 1.1,
+      "sceneType": "ai_scene",
+      "showsProduct": false,
+      "minLengthS": 30,
+      "visualDirection": "A shared moment with friends or family.",
+      "overlay": {
+        "source": "claim:2",
+        "layout": "lower_third",
+        "motion": "fade-up"
+      },
+      "promptScaffold": "{audienceWho} sharing a relaxed moment with friends or family in {setting}. {camera}. {lighting}. {toneMood}."
+    },
+    {
+      "role": "closeup",
+      "label": "Product close-up",
+      "weight": 1.0,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "The real product, up close.",
+      "overlay": {
+        "source": "product_name",
+        "layout": "split_headline",
+        "motion": "slide-in"
+      },
+      "productMotion": "push-in"
+    },
+    {
+      "role": "cta",
+      "label": "Call to action",
+      "weight": 1.1,
+      "sceneType": "product_original",
+      "showsProduct": true,
+      "minLengthS": 15,
+      "visualDirection": "Product with offer and call to action.",
+      "overlay": {
+        "source": "offer_or_cta",
+        "layout": "corner_badge",
+        "motion": "scale-in"
+      },
+      "productMotion": "pan"
+    }
+  ]
+}

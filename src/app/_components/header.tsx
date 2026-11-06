@@ -15,7 +15,7 @@ export function StudioHeader() {
           <span className="grid size-7 place-items-center rounded-md bg-accent text-accent-ink">
             <IconFrames size={17} strokeWidth={2} />
           </span>
-          <span className="text-[15px] font-bold tracking-tight">PINPO</span>
+          <span className="hidden text-[15px] font-bold tracking-tight sm:inline">PINPO</span>
         </Link>
         <NavLinks />
         <div className="ml-auto flex items-center gap-1.5">

@@ -186,120 +186,55 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="grid min-w-0 content-start gap-6">
-          {/* Player / progress */}
-          <section aria-label={`Version ${v.number} video`} className="overflow-hidden rounded-xl border border-line bg-frame">
-            <div className={`grid place-items-center p-4 sm:p-6 ${p.aspect === "16:9" ? "" : "min-h-[22rem]"}`}>
-              {v.status === "ready" && v.finalAssetId ? (
-                <video
-                  aria-label={`Final ad, version ${v.number}`}
-                  controls
-                  preload="metadata"
-                  poster={v.thumbAssetId ? `/api/assets/${v.thumbAssetId}` : undefined}
-                  src={`/api/assets/${v.finalAssetId}`}
-                  className="max-h-[72dvh] max-w-full rounded-md bg-black shadow-lift"
-                  style={{ aspectRatio: ASPECT_RATIO[p.aspect], ...(p.aspect === "16:9" ? { width: "100%" } : { height: "72dvh" }) }}
-                />
-              ) : (
-                <div className="w-full max-w-md py-10 text-center" aria-live="polite">
-                  {v.status === "failed" || v.status === "canceled" ? (
-                    <>
-                      <span className="mx-auto grid size-11 place-items-center rounded-full bg-bad-soft text-bad">{v.status === "failed" ? <IconAlert size={22} /> : <IconX size={22} />}</span>
-                      <p className="mt-4 font-semibold">{v.status === "failed" ? "This version didn't finish" : "Canceled"}</p>
-                      <p className="mt-1 text-sm text-ink-2">{v.status === "failed" ? v.errorMessage ?? "Retry the failed scenes below, or make a new version." : "Make a new version to try again. Finished scenes are reused for free."}</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-semibold">{v.status === "composing" ? "Putting the ad together" : v.status === "queued" ? "Waiting to start" : "Generating scenes"}</p>
-                      <p className="tabular mt-1 text-sm text-ink-2">
-                        {v.status === "composing" ? "Adding text, music and the ending" : `${scenesDone} of ${view.scenes.length} scenes ready`}
-                      </p>
-                      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-panel-2" role="progressbar" aria-label="Progress" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-                        <div className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${Math.max(4, Math.round(progress * 100))}%` }} />
-                      </div>
-                      <p className="mt-3 text-xs text-ink-3">You can leave this page — generation keeps running.</p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-panel px-4 py-2.5 text-[13px] text-ink-2">
-              <span className="tabular">
-                {p.label} · {p.aspect} · {view.settings.lengthS}s · {view.settings.resolution}
-              </span>
-              {running ? (
-                <Button variant="danger" size="sm" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/cancel`, { method: "POST" }))}>
-                  Cancel generation
-                </Button>
-              ) : null}
-            </div>
-          </section>
-
-          <Section title="Scenes" description={running ? undefined : `${scenesDone} of ${view.scenes.length} ready`}>
-            <ol className="grid grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))] gap-3">
-              {view.scenes.map((s, i) => {
-                const ok = s.status === "succeeded" || s.status === "reused";
-                return (
-                  <li key={s.id} className="flex flex-col overflow-hidden rounded-lg border border-line bg-panel-2/40">
-                    <div className="grid aspect-video place-items-center bg-frame">
-                      {s.clipAssetId ? (
-                        <video muted playsInline controls preload="none" src={`/api/assets/${s.clipAssetId}`} aria-label={`Scene ${i + 1} clip`} className="max-h-full max-w-full" style={{ aspectRatio: ASPECT_RATIO[p.aspect] }} />
-                      ) : (
-                        <span className={`text-xs ${s.status === "failed" ? "text-bad" : "text-ink-3"}`}>{s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? s.job.stage : "Waiting"}</span>
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-1 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold leading-snug">
-                          <span className="tabular text-ink-3">{i + 1}</span> {s.label}
-                        </p>
-                        <Status tone={ok ? "ok" : s.status === "failed" ? "bad" : "accent"}>{ok ? "Ready" : s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? "Working" : "Waiting"}</Status>
-                      </div>
-                      <p className="tabular text-xs text-ink-3">
-                        {s.durationS.toFixed(1)}s · {s.sceneType === "product_original" ? "real product photo" : "AI video"}
-                        {s.status === "reused" ? " · reused, $0" : ""}
-                        {s.job && s.job.attempt > 1 ? ` · attempt ${s.job.attempt} of ${s.job.max_attempts}` : ""}
-                        {s.job?.queue_position ? ` · #${s.job.queue_position} in queue` : ""}
-                      </p>
-                      {s.job?.error_message && !ok ? <p className="text-xs text-bad">{s.job.error_message}</p> : null}
-                      {s.status === "failed" ? (
-                        <Button variant="secondary" size="sm" className="mt-1 self-start" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/scenes/${s.id}/retry`, { method: "POST" }))}>
-                          Try this scene again
-                        </Button>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </Section>
-
-          {view.qa.length ? (
-            <Section title="Quality checks" description={`Brand, claim, price, rights and technical checks. Items marked Review need a person to look before export. ${techPassed} technical checks passed (length, size, frame rate, colour, sound, clean decode).`}>
-              <ul className="divide-y divide-line">
-                {sortedQa.map((q) => (
-                  <li key={q.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[11rem_1fr_auto] sm:items-start">
-                    <div className="flex items-center gap-2">
-                      <Status tone={qaTone(q)}>{qaLabel(q)}</Status>
-                      <span className="text-sm font-semibold">{CHECK_LABEL[q.check] ?? q.check.replace(/^technical_/, "").replace(/_/g, " ")}</span>
-                    </div>
-                    <p className="text-sm text-ink-2">
-                      {q.message}
-                      {q.method !== "automated" ? <span className="ml-1 text-xs text-ink-3">({q.method === "heuristic" ? "assessment" : "needs a person"})</span> : null}
+        {/* Player / progress */}
+        <section aria-label={`Version ${v.number} video`} className="min-w-0 overflow-hidden rounded-xl lg:col-start-1 border border-line bg-frame">
+          <div className={`grid place-items-center p-4 sm:p-6 ${p.aspect === "16:9" ? "" : "min-h-[22rem]"}`}>
+            {v.status === "ready" && v.finalAssetId ? (
+              <video
+                aria-label={`Final ad, version ${v.number}`}
+                controls
+                preload="metadata"
+                poster={v.thumbAssetId ? `/api/assets/${v.thumbAssetId}` : undefined}
+                src={`/api/assets/${v.finalAssetId}`}
+                className="max-h-[72dvh] max-w-full rounded-md bg-black shadow-lift"
+                style={{ aspectRatio: ASPECT_RATIO[p.aspect], ...(p.aspect === "16:9" ? { width: "100%" } : { height: "72dvh" }) }}
+              />
+            ) : (
+              <div className="w-full max-w-md py-10 text-center" aria-live="polite">
+                {v.status === "failed" || v.status === "canceled" ? (
+                  <>
+                    <span className="mx-auto grid size-11 place-items-center rounded-full bg-bad-soft text-bad">{v.status === "failed" ? <IconAlert size={22} /> : <IconX size={22} />}</span>
+                    <p className="mt-4 font-semibold">{v.status === "failed" ? "This version didn't finish" : "Canceled"}</p>
+                    <p className="mt-1 text-sm text-ink-2">{v.status === "failed" ? v.errorMessage ?? "Retry the failed scenes below, or make a new version." : "Make a new version to try again. Finished scenes are reused for free."}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold">{v.status === "composing" ? "Putting the ad together" : v.status === "queued" ? "Waiting to start" : "Generating scenes"}</p>
+                    <p className="tabular mt-1 text-sm text-ink-2">
+                      {v.status === "composing" ? "Adding text, music and the ending" : `${scenesDone} of ${view.scenes.length} scenes ready`}
                     </p>
-                    {q.status === "needs_review" && !q.acknowledgedAt ? (
-                      <Button variant="secondary" size="sm" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/qa/${q.id}/ack`, { method: "POST" }))}>
-                        <IconCheck size={15} />I reviewed this
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          ) : null}
-        </div>
+                    <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-panel-2" role="progressbar" aria-label="Progress" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${Math.max(4, Math.round(progress * 100))}%` }} />
+                    </div>
+                    <p className="mt-3 text-xs text-ink-3">You can leave this page — generation keeps running.</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-panel px-4 py-2.5 text-[13px] text-ink-2">
+            <span className="tabular">
+              {p.label} · {p.aspect} · {view.settings.lengthS}s · {view.settings.resolution}
+            </span>
+            {running ? (
+              <Button variant="danger" size="sm" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/cancel`, { method: "POST" }))}>
+                Cancel generation
+              </Button>
+            ) : null}
+          </div>
+        </section>
 
-        <aside className="grid content-start gap-4 lg:sticky lg:top-20" aria-label="Export and cost">
+        <aside className="grid content-start gap-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start" aria-label="Export and cost">
           {v.status === "ready" ? (
             <section aria-labelledby="export-h" className="grid gap-3 rounded-xl border border-line bg-panel p-4">
               <h2 id="export-h" className="font-semibold">
@@ -354,6 +289,71 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
             </p>
           ) : null}
         </aside>
+        <div className="grid min-w-0 content-start gap-6 lg:col-start-1">
+          <Section title="Scenes" description={running ? undefined : `${scenesDone} of ${view.scenes.length} ready`}>
+            <ol className="grid grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))] gap-3">
+              {view.scenes.map((s, i) => {
+                const ok = s.status === "succeeded" || s.status === "reused";
+                return (
+                  <li key={s.id} className="flex flex-col overflow-hidden rounded-lg border border-line bg-panel-2/40">
+                    <div className="flex h-44 items-center justify-center overflow-hidden bg-frame">
+                      {s.clipAssetId ? (
+                        <video muted playsInline controls preload="metadata" src={`/api/assets/${s.clipAssetId}#t=0.1`} aria-label={`Scene ${i + 1} clip`} className="h-44 w-auto max-w-full bg-black object-contain" style={{ aspectRatio: ASPECT_RATIO[p.aspect] }} />
+                      ) : (
+                        <span className={`text-xs ${s.status === "failed" ? "text-bad" : "text-ink-3"}`}>{s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? s.job.stage : "Waiting"}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-1 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold leading-snug">
+                          <span className="tabular text-ink-3">{i + 1}</span> {s.label}
+                        </p>
+                        <Status tone={ok ? "ok" : s.status === "failed" ? "bad" : "accent"}>{ok ? "Ready" : s.status === "failed" ? "Failed" : s.job ? STAGE_LABEL[s.job.stage] ?? "Working" : "Waiting"}</Status>
+                      </div>
+                      <p className="tabular text-xs text-ink-3">
+                        {s.durationS.toFixed(1)}s · {s.sceneType === "product_original" ? "real product photo" : "AI video"}
+                        {s.status === "reused" ? " · reused, $0" : ""}
+                        {s.job && s.job.attempt > 1 ? ` · attempt ${s.job.attempt} of ${s.job.max_attempts}` : ""}
+                        {s.job?.queue_position ? ` · #${s.job.queue_position} in queue` : ""}
+                      </p>
+                      {s.job?.error_message && !ok ? <p className="text-xs text-bad">{s.job.error_message}</p> : null}
+                      {s.status === "failed" ? (
+                        <Button variant="secondary" size="sm" className="mt-1 self-start" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/scenes/${s.id}/retry`, { method: "POST" }))}>
+                          Try this scene again
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </Section>
+
+          {view.qa.length ? (
+            <Section title="Quality checks" description={`Brand, claim, price, rights and technical checks. Items marked Review need a person to look before export. ${techPassed} technical checks passed (length, size, frame rate, colour, sound, clean decode).`}>
+              <ul className="divide-y divide-line">
+                {sortedQa.map((q) => (
+                  <li key={q.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[11rem_1fr_auto] sm:items-start">
+                    <div className="flex items-center gap-2">
+                      <Status tone={qaTone(q)}>{qaLabel(q)}</Status>
+                      <span className="text-sm font-semibold">{CHECK_LABEL[q.check] ?? q.check.replace(/^technical_/, "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</span>
+                    </div>
+                    <p className="text-sm text-ink-2">
+                      {q.message}
+                      {q.method !== "automated" ? <span className="ml-1 text-xs text-ink-3">({q.method === "heuristic" ? "assessment" : "needs a person"})</span> : null}
+                    </p>
+                    {q.status === "needs_review" && !q.acknowledgedAt ? (
+                      <Button variant="secondary" size="sm" disabled={busy} onClick={() => act(() => api(`/api/versions/${versionId}/qa/${q.id}/ack`, { method: "POST" }))}>
+                        <IconCheck size={15} />I reviewed this
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : null}
+        </div>
+
       </div>
     </div>
   );

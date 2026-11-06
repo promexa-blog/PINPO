@@ -147,6 +147,21 @@ describe("vertical slice pipeline (mock fal)", () => {
     attest(versionId);
     expect(exportGate(versionId).ok).toBe(true);
 
+    // M7/PV2 at export time (audit #5): an offer or licence that expires AFTER compose blocks download.
+    db().prepare("UPDATE briefs SET offers_json = json_set(offers_json, '$.validUntil', '2030-06-30') WHERE version_id = ?").run(versionId);
+    expect(exportGate(versionId, "2030-06-30").ok).toBe(true);
+    const lapsed = exportGate(versionId, "2030-07-01");
+    expect(lapsed.ok).toBe(false);
+    expect(lapsed.expired).toEqual(["The offer ended on 2030-06-30. Make a new version with the current price or offer."]);
+    const logoId = (db().prepare("SELECT asset_id FROM brand_kit_logos LIMIT 1").get() as { asset_id: string }).asset_id;
+    db().prepare("UPDATE assets SET license_expires_at = ? WHERE id = ?").run(Date.UTC(2030, 0, 1), logoId);
+    try {
+      expect(exportGate(versionId, "2029-01-01", Date.UTC(2029, 0, 1)).ok).toBe(true);
+      expect(exportGate(versionId, "2029-01-01", Date.UTC(2030, 0, 2)).expired).toEqual([expect.stringMatching(/^The licence for .+ expired on 2030-01-01\.$/)]);
+    } finally {
+      db().prepare("UPDATE assets SET license_expires_at = NULL WHERE id = ?").run(logoId);
+    }
+
     // Costs: mock → $0 calculated, estimate recorded, labelled separately.
     const cost = costSummary(versionId);
     expect(cost.mock).toBe(true);

@@ -1,7 +1,12 @@
 import { claimNext, countRunning, getJob, logEvent, renewLease, transition, LeaseLostError, DEFAULT_LEASE_MS } from "@/server/jobs/queue";
+import { failJobOwner } from "@/server/jobs/generate";
+import { db } from "@/server/db";
 import type { JobHandler, JobContext } from "./types";
 
 const LEASE_RENEW_MS = 15_000;
+/** A handler that throws outside its own error handling is retried, but not forever. */
+const MAX_HANDLER_CRASHES = 3;
+const CRASH_MESSAGE = "unexpected handler error; released for retry";
 
 export interface Scheduler {
   tick(): void;
@@ -11,7 +16,8 @@ export interface Scheduler {
 
 /**
  * Claims due jobs per handler up to its concurrency and runs them with lease renewal (plan §5).
- * Errors that escape a handler release the job back to pending so it's retried, never lost.
+ * Errors that escape a handler release the job back to pending so it's retried, never lost —
+ * up to MAX_HANDLER_CRASHES times; then the job, its scene and its version fail visibly.
  */
 export function createScheduler(owner: string, handlers: JobHandler[], log: (msg: string, data?: unknown) => void): Scheduler {
   const running = new Map<string, { promise: Promise<void>; abort: AbortController }>();
@@ -37,14 +43,15 @@ export function createScheduler(owner: string, handlers: JobHandler[], log: (msg
       .catch((err: unknown) => {
         if (err instanceof LeaseLostError || abort.signal.aborted) return;
         log(`handler ${handler.type} crashed`, { jobId, error: String(err) });
+        const errorMessage = err instanceof Error ? err.message : String(err);
         try {
-          transition(jobId, owner, {
-            status: "pending",
-            message: "unexpected handler error; released for retry",
-            errorCode: "HANDLER_CRASH",
-            errorMessage: err instanceof Error ? err.message : String(err),
-            nextRunAt: Date.now() + 10_000,
-          });
+          const crashes = (db().prepare("SELECT COUNT(*) AS n FROM job_events WHERE job_id = ? AND message = ?").get(jobId, CRASH_MESSAGE) as { n: number }).n + 1;
+          if (crashes >= MAX_HANDLER_CRASHES) {
+            const job = transition(jobId, owner, { status: "failed", message: `gave up after ${crashes} unexpected errors`, errorCode: "HANDLER_CRASH", errorMessage });
+            failJobOwner(job, "HANDLER_CRASH", `Stopped after repeated errors: ${errorMessage}`);
+          } else {
+            transition(jobId, owner, { status: "pending", message: CRASH_MESSAGE, errorCode: "HANDLER_CRASH", errorMessage, nextRunAt: Date.now() + 10_000 * crashes });
+          }
         } catch {
           /* lease already gone */
         }

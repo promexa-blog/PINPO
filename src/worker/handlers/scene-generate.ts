@@ -53,7 +53,12 @@ export const sceneGenerateHandler: JobHandler = {
 // ---------------- original-product scenes (no AI, plan §7) ----------------
 
 async function runLocal(ctx: JobContext, input: SceneJobInput): Promise<void> {
-  const brand = brandForVersion(ctx.job.version_id!);
+  let brand: ReturnType<typeof brandForVersion>;
+  try {
+    brand = brandForVersion(ctx.job.version_id!);
+  } catch (err) {
+    return handleError(ctx, input, err);
+  }
   const dir = path.join(paths.work, `${ctx.job.id}-a${ctx.job.attempt}`);
   await mkdir(dir, { recursive: true });
   try {
@@ -93,8 +98,15 @@ async function runLocal(ctx: JobContext, input: SceneJobInput): Promise<void> {
 // ---------------- AI scenes ----------------
 
 async function runAi(ctx: JobContext, input: SceneJobInput): Promise<void> {
-  const provider = await getProvider();
-  const model = getModel(input.modelId);
+  // Setup errors (missing FAL_KEY → auth, unknown model) go through the retry policy, not a crash loop.
+  let provider: Awaited<ReturnType<typeof getProvider>>;
+  let model: ReturnType<typeof getModel>;
+  try {
+    provider = await getProvider();
+    model = getModel(input.modelId);
+  } catch (err) {
+    return handleError(ctx, input, err);
+  }
   const endpoint = input.endpoint!;
   try {
     for (;;) {

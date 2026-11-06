@@ -23,12 +23,32 @@ describe("upload sniffing (A3)", () => {
 
 describe("same-origin guard (A2)", () => {
   it("allows GET and same-origin mutations", () => {
-    expect(() => assertSameOrigin(req("GET", {}))).not.toThrow();
+    expect(() => assertSameOrigin(req("GET", { host: "127.0.0.1:3000" }))).not.toThrow();
+    expect(() => assertSameOrigin(req("GET", { host: "localhost:3100" }))).not.toThrow();
     expect(() => assertSameOrigin(req("POST", { origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000", "sec-fetch-site": "same-origin" }))).not.toThrow();
   });
   it("blocks cross-origin and origin-less mutations", () => {
     expect(() => assertSameOrigin(req("POST", { origin: "https://evil.example", host: "127.0.0.1:3000" }))).toThrow(/Cross-origin/);
     expect(() => assertSameOrigin(req("POST", { host: "127.0.0.1:3000", "sec-fetch-site": "cross-site" }))).toThrow(/Cross-origin/);
     expect(() => assertSameOrigin(req("DELETE", { host: "127.0.0.1:3000" }))).toThrow(/Missing Origin/);
+  });
+});
+
+describe("DNS-rebinding guard (security audit F1)", () => {
+  const r = (method: string, headers: Record<string, string>) => new Request("http://127.0.0.1:3000/api/ads", { method, headers });
+  it("refuses a foreign Host on reads and writes, even with a matching Origin", () => {
+    expect(() => assertSameOrigin(r("GET", { host: "evil.example:3000" }))).toThrow(expect.objectContaining({ code: "BAD_HOST", status: 421 }));
+    expect(() => assertSameOrigin(r("POST", { host: "evil.example:3000", origin: "http://evil.example:3000", "sec-fetch-site": "same-origin" }))).toThrow(expect.objectContaining({ code: "BAD_HOST" }));
+    expect(() => assertSameOrigin(r("GET", {}))).toThrow(expect.objectContaining({ code: "BAD_HOST" }));
+  });
+  it("accepts IPv6 loopback and extra hosts from PINPO_ALLOWED_HOSTS", () => {
+    expect(() => assertSameOrigin(r("GET", { host: "[::1]:3000" }))).not.toThrow();
+    process.env.PINPO_ALLOWED_HOSTS = "studio.local";
+    try {
+      expect(() => assertSameOrigin(r("GET", { host: "studio.local:3000" }))).not.toThrow();
+      expect(() => assertSameOrigin(r("GET", { host: "studio.local.evil.example" }))).toThrow(expect.objectContaining({ code: "BAD_HOST" }));
+    } finally {
+      delete process.env.PINPO_ALLOWED_HOSTS;
+    }
   });
 });

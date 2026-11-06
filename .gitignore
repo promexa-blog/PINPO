@@ -2,8 +2,8 @@ node_modules/
 .next/
 out/
 .cache/
-data/
-storage/
+/data/
+/storage/
 coverage/
 playwright-report/
 test-results/

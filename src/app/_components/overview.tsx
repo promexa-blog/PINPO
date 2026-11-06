@@ -251,6 +251,9 @@ export function Overview({ versionId, adId }: { versionId: string; adId: string 
                 <GateRow ok={fails.length === 0} label={fails.length ? `Fix ${fails.length} failed check${fails.length === 1 ? "" : "s"} — usually by editing the brief in a new version` : "No failed checks"} />
                 <GateRow ok={toReview.length === 0} label={toReview.length ? `Review ${toReview.length} item${toReview.length === 1 ? "" : "s"} in Quality checks` : "Everything reviewed"} />
                 <GateRow ok={view.attested} label={view.attested ? "Claims and prices confirmed" : "Confirm claims and prices below"} />
+                {(view.exportGate?.expired ?? []).map((r) => (
+                  <GateRow key={r} ok={false} label={r} />
+                ))}
               </ol>
               <div className="rounded-lg border border-line p-3">
                 <Checkbox id="attest" checked={view.attested} onChange={(val) => (val && !view.attested ? void act(() => api(`/api/versions/${versionId}/attest`, { method: "POST", body: JSON.stringify({ confirm: true }) })) : undefined)} label={view.attestationText} />

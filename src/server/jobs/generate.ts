@@ -9,6 +9,7 @@ import { sceneMode } from "../planning/estimate";
 import { getAsset } from "../storage/assets";
 import { assertDiskSpace } from "../storage/disk";
 import { enqueue, requestCancel } from "./queue";
+import { getWorker, workerOnline } from "./worker-lease";
 import { addCost } from "./costs";
 import { indiaToday } from "../brief/offers";
 import { AppError, now, sha256, stableStringify } from "../util";
@@ -50,6 +51,11 @@ export class DraftNotReady extends AppError {
 export async function startGenerate(versionId: string): Promise<{ versionId: string; jobs: number; reused?: number }> {
   const v0 = requireVersion(versionId);
   if (v0.status !== "draft") return { versionId, jobs: 0 }; // already generating/generated → idempotent
+  // A live worker in real mode without a key could only fail every AI scene: say so now.
+  const w = getWorker();
+  if (w && workerOnline(w) && w.mock_mode !== 1 && w.fal_key_configured !== 1) {
+    throw new AppError("FAL_KEY_MISSING", "Real generation needs a fal.ai key. Add FAL_KEY to .env.local and restart the studio, or set FAL_MOCK=1 for free test clips.", 409);
+  }
   const check = checkDraft(versionId);
   if (!check.ok) throw new DraftNotReady(check.blocking);
   const scenes = draftScenes(versionId);
@@ -135,14 +141,38 @@ export function cancelVersion(versionId: string): number {
   return n;
 }
 
-/** Retry a failed scene as a new attempt (plan §4 POST /scenes/[id]/retry). */
-export function retryScene(versionId: string, sceneId: string): void {
-  tx(() => {
-    const job = db().prepare("SELECT * FROM jobs WHERE scene_id = ? AND type = 'scene_generate' ORDER BY created_at DESC LIMIT 1").get(sceneId) as { status: string; input_json: string; attempt: number } | undefined;
+/**
+ * Retry a failed scene as a new attempt (plan §4 POST /scenes/[id]/retry). A billing/auth failure
+ * cancels the sibling scenes, so every scene that is failed or canceled is re-queued together —
+ * otherwise compose could never start and the version would sit in "generating" forever.
+ */
+export function retryScene(versionId: string, sceneId: string): { requeued: number } {
+  return tx(() => {
+    const v = requireVersion(versionId);
+    if (v.status === "canceled") throw new AppError("VERSION_CANCELED", "This version was canceled. Make a new version from it to try again.", 409);
+    const latest = (id: string) => db().prepare("SELECT * FROM jobs WHERE scene_id = ? AND type = 'scene_generate' ORDER BY created_at DESC LIMIT 1").get(id) as { status: string; input_json: string } | undefined;
+    const job = latest(sceneId);
     if (!job || job.status !== "failed") throw new AppError("NOT_FAILED", "Only failed scenes can be retried.", 409);
-    const n = (db().prepare("SELECT COUNT(*) AS n FROM jobs WHERE scene_id = ?").get(sceneId) as { n: number }).n;
-    enqueue({ type: "scene_generate", idempotencyKey: `scene:${sceneId}:r${n}`, versionId, sceneId, input: JSON.parse(job.input_json), priority: 40, maxAttempts: 3 });
-    db().prepare("UPDATE scenes SET status = 'pending' WHERE id = ?").run(sceneId);
+    const stalled = db().prepare("SELECT id FROM scenes WHERE version_id = ? AND status IN ('failed','canceled')").all(versionId) as { id: string }[];
+    let requeued = 0;
+    for (const { id } of stalled) {
+      const last = latest(id);
+      if (!last || (last.status !== "failed" && last.status !== "canceled")) continue;
+      const n = (db().prepare("SELECT COUNT(*) AS n FROM jobs WHERE scene_id = ?").get(id) as { n: number }).n;
+      enqueue({ type: "scene_generate", idempotencyKey: `scene:${id}:r${n}`, versionId, sceneId: id, input: JSON.parse(last.input_json), priority: 40, maxAttempts: 3 });
+      db().prepare("UPDATE scenes SET status = 'pending' WHERE id = ?").run(id);
+      requeued++;
+    }
     db().prepare("UPDATE ad_versions SET status = 'generating', error_code = NULL, error_message = NULL, updated_at = ? WHERE id = ?").run(now(), versionId);
+    return { requeued };
+  });
+}
+
+/** A job that can't complete (e.g. repeated handler crashes) fails its scene and version visibly. */
+export function failJobOwner(job: { scene_id: string | null; version_id: string | null }, code: string, message: string): void {
+  tx(() => {
+    if (job.scene_id) db().prepare("UPDATE scenes SET status = 'failed' WHERE id = ? AND status NOT IN ('succeeded','reused')").run(job.scene_id);
+    if (job.version_id)
+      db().prepare("UPDATE ad_versions SET status = 'failed', error_code = ?, error_message = ?, updated_at = ? WHERE id = ? AND status IN ('queued','generating','composing')").run(code, message.slice(0, 500), now(), job.version_id);
   });
 }

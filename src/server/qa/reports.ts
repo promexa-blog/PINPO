@@ -2,6 +2,9 @@ import "../guard";
 import { db, tx } from "../db";
 import { newId, now, AppError } from "../util";
 import type { QaItem } from "./checks/compliance";
+import { getBrief } from "../db/repos/versions";
+import { indiaToday } from "../brief/offers";
+import { usedAssets } from "./used-assets";
 
 export type ReportKind = "technical" | "creative";
 
@@ -82,7 +85,25 @@ export function hasFinalAttestation(versionId: string): boolean {
 }
 
 /** Export gate (plan §9): no fails, all reviews acknowledged, final attestation recorded. */
-export function exportGate(versionId: string): { ok: boolean; reasons: string[] } {
+/**
+ * Date-dependent rules re-checked at download time (plan M7, PV2): QA ran when the video was made,
+ * but an offer, group deal or licence can expire afterwards. An expired one blocks export.
+ */
+export function liveExpiryReasons(versionId: string, today = indiaToday(), at = now()): string[] {
+  const out: string[] = [];
+  const { offers } = getBrief(versionId);
+  if (offers.validUntil && offers.validUntil < today) out.push(`The offer ended on ${offers.validUntil}. Make a new version with the current price or offer.`);
+  if (offers.groupBuy?.deadline && offers.groupBuy.deadline < today) out.push(`The group deal closed on ${offers.groupBuy.deadline}. Make a new version with a new deadline.`);
+  const seen = new Set<string>();
+  for (const { asset } of usedAssets(versionId)) {
+    if (seen.has(asset.id) || !asset.license_expires_at || asset.license_expires_at >= at) continue;
+    seen.add(asset.id);
+    out.push(`The licence for ${asset.original_name ?? "an asset in this ad"} expired on ${new Date(asset.license_expires_at).toISOString().slice(0, 10)}.`);
+  }
+  return out;
+}
+
+export function exportGate(versionId: string, today?: string, at?: number): { ok: boolean; reasons: string[]; expired: string[] } {
   const reasons: string[] = [];
   const items = getItems(versionId);
   if (!items.length) reasons.push("QA hasn't run yet.");
@@ -91,5 +112,7 @@ export function exportGate(versionId: string): { ok: boolean; reasons: string[] 
   const open = items.filter((i) => i.status === "needs_review" && !i.acknowledgedAt);
   if (open.length) reasons.push(`${open.length} item(s) still need your review.`);
   if (!hasFinalAttestation(versionId)) reasons.push("Confirm that claims, prices and offers are accurate.");
-  return { ok: reasons.length === 0, reasons };
+  const expired = liveExpiryReasons(versionId, today, at);
+  reasons.push(...expired);
+  return { ok: reasons.length === 0, reasons, expired };
 }

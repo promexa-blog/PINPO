@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
 import { Editor } from "../../../_components/editor";
-import { AdHeading } from "../../../_components/ad-heading";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Edit ad" };
@@ -14,9 +13,8 @@ export default async function EditPage({ params }: { params: Promise<{ adId: str
   if (!ad) notFound();
   const n = (db().prepare("SELECT number FROM ad_versions WHERE id = ?").get(ad.current_version_id) as { number: number }).number;
   return (
-    <main id="main" className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
-      <AdHeading name={ad.name} brandName={ad.brand_name} eyebrow={`Draft · version ${n}`} />
-      <Editor versionId={ad.current_version_id} adId={ad.id} />
+    <main id="main" className="pb-20">
+      <Editor versionId={ad.current_version_id} adId={ad.id} title={{ name: ad.name, meta: `Draft · version ${n}${ad.brand_name ? ` · ${ad.brand_name}` : ""}` }} />
     </main>
   );
 }

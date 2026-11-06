@@ -12,7 +12,8 @@ export async function waitForStudio(page: Page) {
 
 /** Moves to an editor step using the step rail. */
 export async function goToStep(page: Page, label: "Product" | "Message" | "Format" | "Storyboard" | "Sound" | "Generate") {
-  await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: new RegExp(`^${label}`) }).click();
+  // Desktop tabs are named "<Label> …"; the compact phone stepper uses "Step N: <Label>".
+  await page.getByRole("button", { name: new RegExp(`^(Step \\d+: )?${label}\\b`) }).first().click();
   await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
 }
 
@@ -45,7 +46,7 @@ export async function createAndFillAd(page: Page, name: string) {
   await page.getByLabel("Selling price (₹)").fill("899");
   await page.getByLabel("MRP (₹)").fill("1299");
   await page.getByRole("button", { name: "Today" }).click();
-  await expect(page.getByText("All changes saved")).toBeVisible();
+  await expect(page.getByText("All changes saved").filter({ visible: true })).toBeVisible();
   return new URL(page.url()).pathname.replace(/\/edit$/, "");
 }
 
@@ -53,5 +54,5 @@ export async function buildStoryboard(page: Page) {
   await goToStep(page, "Storyboard");
   await page.getByRole("button", { name: /Build storyboard|Rebuild from brief/ }).click();
   await expect(page.getByRole("heading", { name: /Hook — product reveal/ })).toBeVisible();
-  await expect(page.getByText("All changes saved")).toBeVisible();
+  await expect(page.getByText("All changes saved").filter({ visible: true })).toBeVisible();
 }

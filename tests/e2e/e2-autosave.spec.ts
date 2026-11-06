@@ -14,7 +14,7 @@ test("autosaves the draft and survives a reload; second tab gets a conflict", as
   await tab2.goto(page.url());
   await expect(tab2.getByLabel("Product name")).toHaveValue("Steel Lunch Box");
   await page.getByLabel("Product name").fill("Steel Lunch Box Pro");
-  await expect(page.getByText("All changes saved")).toBeVisible();
+  await expect(page.getByText("All changes saved").filter({ visible: true })).toBeVisible();
   await tab2.getByLabel("Product name").fill("Something else");
-  await expect(tab2.getByText(/Changed in another tab/)).toBeVisible();
+  await expect(tab2.getByText(/Changed in another tab/).filter({ visible: true })).toBeVisible();
 });

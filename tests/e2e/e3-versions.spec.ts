@@ -15,7 +15,7 @@ test("new version from a ready ad keeps the old one", async ({ page }) => {
   await goToStep(page, "Format");
   await page.getByText("Logo and website only").click();
   await expect(page.getByRole("radio", { name: /Minimal/ })).toBeChecked();
-  await expect(page.getByText("All changes saved")).toBeVisible();
+  await expect(page.getByText("All changes saved").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: /Generate version 2/ }).first().click();
   await page.waitForURL(new RegExp(`${adPath}$`));
   await expect(page.getByLabel("Final ad, version 2")).toBeVisible({ timeout: 240_000 });

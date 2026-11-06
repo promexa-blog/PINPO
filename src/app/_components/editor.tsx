@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VersionView } from "@/server/views";
 import { CATEGORY_LABEL, LANG_LABEL, type BriefInput, type Lang } from "@/lib/brief";
@@ -81,7 +82,7 @@ const stepFromHash = (): StepKey => {
   return (STEPS.some((s) => s.key === h) ? h : "product") as StepKey;
 };
 
-export function Editor({ versionId, adId }: { versionId: string; adId: string }) {
+export function Editor({ versionId, adId, title }: { versionId: string; adId: string; title: { name: string; meta: string } }) {
   const router = useRouter();
   const { confirm: ask, toast } = useFeedback();
   const [view, setView] = useState<VersionView | null>(null);
@@ -169,8 +170,32 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
     timer.current = setTimeout(() => void flush(), 800);
   };
 
-  if (error && !draft) return <Notice tone="bad">{error}</Notice>;
-  if (!draft || !view) return <EditorSkeleton />;
+  const pageTitle = (
+    <div className="mx-auto max-w-7xl px-4 pb-5 pt-5 sm:px-6">
+      <Link href="/" className="inline-flex items-center gap-1.5 rounded-md text-sm text-ink-2 hover:text-ink">
+        <IconArrowLeft size={16} />
+        All ads
+      </Link>
+      <h1 className="mt-2 text-[1.5rem] font-semibold leading-tight tracking-tight">{title.name}</h1>
+      <p className="mt-1 text-sm text-ink-2">{title.meta}</p>
+    </div>
+  );
+  if (error && !draft)
+    return (
+      <>
+        {pageTitle}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <Notice tone="bad">{error}</Notice>
+        </div>
+      </>
+    );
+  if (!draft || !view)
+    return (
+      <>
+        {pageTitle}
+        <EditorSkeleton />
+      </>
+    );
 
   const { brief, settings, finishing } = draft;
   const setBrief = (b: Partial<BriefInput>) => update({ brief: { ...brief, ...b } });
@@ -251,39 +276,81 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
 
   return (
     <div>
-      {/* Step rail */}
-      <nav aria-label="Steps" className="sticky top-14 z-20 -mx-4 border-b border-line bg-canvas/95 px-4 sm:-mx-6 sm:px-6">
-        <ol className="-mx-1 flex overflow-x-auto py-2">
-          {STEPS.map((s, i) => {
-            const active = s.key === step;
-            const issues = issuesFor(s.key);
-            const complete = done[s.key] && s.key !== "review";
-            return (
-              <li key={s.key} className="flex shrink-0 items-center">
-                {i > 0 ? <span aria-hidden className="mx-0.5 h-px w-3 bg-line sm:w-5" /> : null}
-                <button
-                  type="button"
-                  onClick={() => go(s.key)}
-                  aria-current={active ? "step" : undefined}
-                  className={`relative inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-medium transition-colors ${active ? "bg-panel-2 text-ink ring-1 ring-line-strong" : "text-ink-2 hover:bg-panel-2 hover:text-ink"}`}
-                >
-                  <span aria-hidden className={`grid size-5 place-items-center rounded-full text-[11px] font-bold ${complete ? "bg-ok-soft text-ok" : active ? "bg-accent text-accent-ink" : "border border-line-strong text-ink-3"}`}>
-                    {complete ? <IconCheck size={12} strokeWidth={2.5} /> : i + 1}
-                  </span>
-                  {s.label}
-                  {issues && s.key !== "review" ? <span className="tabular rounded-full bg-bad-soft px-1.5 text-[11px] font-bold text-bad">{issues}</span> : null}
-                  <span className="sr-only">{complete ? "(done)" : issues ? `(${issues} to fix)` : ""}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      {pageTitle}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      {/* Step bar: full width like the site header, content aligned to the page container. */}
+      <div className="sticky top-[57px] z-20 border-b border-line bg-canvas">
+        <div className="mx-auto flex max-w-7xl items-stretch gap-4 px-4 sm:px-6">
+          <nav aria-label="Steps" className="-ml-3 hidden min-w-0 lg:flex">
+            <ol className="flex items-stretch">
+              {STEPS.map((s, i) => {
+                const active = s.key === step;
+                const issues = s.key === "review" ? 0 : issuesFor(s.key);
+                const complete = done[s.key] && s.key !== "review";
+                return (
+                  <li key={s.key} className="flex">
+                    <button
+                      type="button"
+                      onClick={() => go(s.key)}
+                      aria-current={active ? "step" : undefined}
+                      className={`relative flex h-12 items-center gap-2 px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-offset-[-4px] ${active ? "text-ink" : "text-ink-2 hover:text-ink"}`}
+                    >
+                      <span aria-hidden className={`grid size-5 place-items-center rounded-full text-[11px] font-bold ${complete ? "bg-ok-soft text-ok" : active ? "bg-accent text-accent-ink" : "border border-line-strong text-ink-3"}`}>
+                        {complete ? <IconCheck size={12} strokeWidth={2.5} /> : i + 1}
+                      </span>
+                      {s.label}
+                      {issues ? <span className="tabular rounded-full bg-bad-soft px-1.5 text-[11px] font-bold text-bad">{issues}</span> : null}
+                      <span className="sr-only">{complete ? "(done)" : issues ? `(${issues} to fix)` : ""}</span>
+                      <span aria-hidden className={`absolute inset-x-3 -bottom-px h-0.5 rounded-full ${active ? "bg-accent" : "bg-transparent"}`} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+
+          {/* Compact stepper below lg: no scrolling strip. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 py-2 lg:hidden">
+            <Button variant="quiet" size="sm" aria-label="Previous step" disabled={idx === 0} onClick={() => go(STEPS[idx - 1]!.key)}>
+              <IconArrowLeft size={16} />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <span className="tabular text-ink-3">
+                  {idx + 1}/{STEPS.length}
+                </span>
+                <span className="truncate">{current.label}</span>
+                {issuesFor(step) && step !== "review" ? <span className="tabular rounded-full bg-bad-soft px-1.5 text-[11px] font-bold text-bad">{issuesFor(step)}</span> : null}
+              </p>
+              <ol aria-label="Steps" className="mt-1 flex gap-1">
+                {STEPS.map((s, i) => (
+                  <li key={s.key} className="flex-1">
+                    <button type="button" onClick={() => go(s.key)} aria-current={s.key === step ? "step" : undefined} aria-label={`Step ${i + 1}: ${s.label}${done[s.key] && s.key !== "review" ? " (done)" : ""}`} className="flex h-5 w-full items-center">
+                      <span aria-hidden className={`h-1 w-full rounded-full ${s.key === step ? "bg-accent" : done[s.key] && s.key !== "review" ? "bg-ok/60" : "bg-panel-2"}`} />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <Button variant="quiet" size="sm" aria-label="Next step" disabled={idx === STEPS.length - 1} onClick={() => go(STEPS[idx + 1]!.key)}>
+              <IconArrowRight size={16} />
+            </Button>
+          </div>
+
+          <div className="ml-auto hidden shrink-0 items-center gap-4 lg:flex">
+            <SaveState save={save} className="hidden xl:flex" />
+            <Button onClick={generate} disabled={busy !== null || !check?.ok || save === "conflict"} title={check && !check.ok ? `${check.blocking.length} thing${check.blocking.length === 1 ? "" : "s"} to fix first` : undefined}>
+              <IconPlay size={15} />
+              {busy === "generate" ? "Starting…" : `Generate version ${view.version.number}`}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto mt-8 grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
           <div key={step} className="step-enter mb-5">
-            <p className="text-xs font-semibold text-ink-3">
+            <p className="hidden text-xs font-semibold text-ink-3 lg:block">
               Step {idx + 1} of {STEPS.length}
             </p>
             <h2 ref={heading} tabIndex={-1} className="mt-1 scroll-mt-32 text-xl font-semibold tracking-tight focus:outline-none">
@@ -591,21 +658,38 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
 
             {step === "storyboard" ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel p-4">
-                  <p className="text-sm text-ink-2">
-                    {draft.scenes.length ? (
-                      <>
-                        <span className="font-semibold text-ink">{draft.scenes.length} scenes</span> · <span className="tabular">{totalS.toFixed(1)}s</span> plus a 3s ending
-                      </>
-                    ) : (
-                      "Fill in the product and message first, then build the storyboard."
-                    )}
-                  </p>
-                  <Button variant={draft.scenes.length ? "secondary" : "primary"} onClick={() => buildStoryboard(false)} disabled={busy !== null}>
-                    <IconRefresh size={16} />
-                    {busy === "storyboard" ? "Building…" : draft.scenes.length ? "Rebuild from brief" : "Build storyboard"}
-                  </Button>
-                </div>
+                {draft.scenes.length ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel p-4">
+                    <p className="text-sm text-ink-2">
+                      <span className="font-semibold text-ink">{draft.scenes.length} scenes</span> · <span className="tabular">{totalS.toFixed(1)}s</span> plus a 3s ending
+                    </p>
+                    <Button variant="secondary" onClick={() => buildStoryboard(false)} disabled={busy !== null}>
+                      <IconRefresh size={16} />
+                      {busy === "storyboard" ? "Building…" : "Rebuild from brief"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid place-items-center rounded-xl border border-dashed border-line-strong bg-panel px-6 py-14 text-center">
+                    <span aria-hidden className="grid size-12 place-items-center rounded-xl bg-accent-soft text-accent-text">
+                      <IconFilm size={24} />
+                    </span>
+                    <h3 className="mt-4 text-base font-semibold">No storyboard yet</h3>
+                    <p className="mt-1.5 max-w-md text-sm text-ink-2">PINPO plans every scene from your brief and the template — camera, setting, timing and on-screen text. You can change any of it afterwards.</p>
+                    {!done.product || !done.message ? (
+                      <p className="mt-3 text-[13px] font-semibold text-warn">
+                        Finish{" "}
+                        {[!done.product ? "Product" : null, !done.message ? "Message" : null]
+                          .filter(Boolean)
+                          .join(" and ")}{" "}
+                        first for a complete storyboard.
+                      </p>
+                    ) : null}
+                    <Button className="mt-5" onClick={() => buildStoryboard(false)} disabled={busy !== null}>
+                      <IconRefresh size={16} />
+                      {busy === "storyboard" ? "Building…" : "Build storyboard"}
+                    </Button>
+                  </div>
+                )}
                 {draft.scenes.length ? (
                   <>
                     <StoryboardTimeline
@@ -907,12 +991,10 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
           </div>
         </div>
 
-        <aside className="lg:sticky lg:top-32 lg:self-start" aria-label="Ad summary">
+        <aside className="lg:sticky lg:top-[8.5rem] lg:self-start" aria-label="Ad summary">
           <div className="grid gap-4 rounded-xl border border-line bg-panel p-4">
-            <p className="flex items-center gap-2 text-xs font-semibold text-ink-2" aria-live="polite">
-              <span aria-hidden className={`size-1.5 rounded-full ${save === "saved" ? "bg-ok" : save === "conflict" || save === "error" ? "bg-bad" : "saving-dot bg-warn"}`} />
-              {{ saved: "All changes saved", saving: "Saving…", dirty: "Saving soon…", conflict: "Changed in another tab — reload the page", error: "Couldn't save — check your connection" }[save]}
-            </p>
+            <h2 className="text-sm font-semibold">Summary</h2>
+            <SaveState save={save} className="xl:hidden" />
             <div>
               <p className="flex items-center gap-2 text-sm font-semibold">
                 <AspectGlyph aspect={platform.aspect} size={16} />
@@ -945,7 +1027,7 @@ export function Editor({ versionId, adId }: { versionId: string; adId: string })
                 <IconCheck size={15} /> Ready to generate
               </p>
             ) : null}
-            <Button onClick={generate} disabled={busy !== null || !check?.ok || save === "conflict"}>
+            <Button className="lg:hidden" onClick={generate} disabled={busy !== null || !check?.ok || save === "conflict"}>
               <IconPlay size={15} />
               {busy === "generate" ? "Starting…" : `Generate version ${view.version.number}`}
             </Button>
@@ -965,9 +1047,18 @@ function IconInfoDot() {
   return <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warn" />;
 }
 
+function SaveState({ save, className = "" }: { save: SaveState; className?: string }) {
+  return (
+    <p className={`flex items-center gap-2 text-xs font-medium text-ink-2 ${className}`} aria-live="polite">
+      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${save === "saved" ? "bg-ok" : save === "conflict" || save === "error" ? "bg-bad" : "saving-dot bg-warn"}`} />
+      {{ saved: "All changes saved", saving: "Saving…", dirty: "Saving soon…", conflict: "Changed in another tab — reload the page", error: "Couldn't save — check your connection" }[save]}
+    </p>
+  );
+}
+
 function EditorSkeleton(): ReactNode {
   return (
-    <div aria-busy="true" aria-label="Loading the editor" className="mt-4 grid animate-pulse gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+    <div aria-busy="true" aria-label="Loading the editor" className="mx-auto mt-4 grid max-w-7xl animate-pulse gap-6 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
       <div className="grid gap-4">
         <div className="h-10 rounded-lg bg-panel" />
         <div className="h-48 rounded-xl bg-panel" />

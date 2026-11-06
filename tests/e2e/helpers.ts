@@ -29,7 +29,7 @@ export async function createAndFillAd(page: Page, name: string) {
   // Step 1 — product
   await page.getByLabel("Product name").fill("Steel Lunch Box");
   await page.getByLabel("How the product looks").fill("A brushed stainless-steel three-tier lunch box with a matte black clip handle");
-  await page.getByLabel("Add a product photo").setInputFiles(PRODUCT_PNG);
+  await page.getByLabel("Add product photos").setInputFiles(PRODUCT_PNG);
   await page.getByLabel("I have permission to use this image in my ads.").check();
   await page.getByRole("button", { name: "Upload" }).click();
   await expect(page.getByRole("img", { name: "Product photo 1" })).toBeVisible();

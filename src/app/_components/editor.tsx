@@ -400,7 +400,15 @@ export function Editor({ versionId, adId, title }: { versionId: string; adId: st
                       ))}
                     </ul>
                   ) : null}
-                  {brief.product.imageAssetIds.length < 9 ? <Upload purpose="product_image" label="Add a product photo" onUploaded={(a) => setBrief({ product: { ...brief.product, imageAssetIds: [...brief.product.imageAssetIds, a.id].slice(0, 9) } })} /> : null}
+                  {brief.product.imageAssetIds.length < 9 ? <Upload
+                      purpose="product_image"
+                      label={brief.product.imageAssetIds.length ? "Add more photos" : "Add product photos"}
+                      multiple={9 - brief.product.imageAssetIds.length}
+                      onUploadedMany={(assets) => {
+                        setBrief({ product: { ...brief.product, imageAssetIds: [...brief.product.imageAssetIds, ...assets.map((a) => a.id).filter((id) => !brief.product.imageAssetIds.includes(id))].slice(0, 9) } });
+                        toast(assets.length === 1 ? "Photo added." : `${assets.length} photos added.`);
+                      }}
+                    /> : null}
                 </Section>
               </>
             ) : null}

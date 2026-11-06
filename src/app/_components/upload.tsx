@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, Field, Input, Select } from "./ui";
 import { IconUpload, IconX } from "./icons";
 
@@ -25,11 +25,30 @@ const HINT: Record<Purpose, string> = {
   voiceover: "MP3, WAV or M4A · up to 20 MB.",
 };
 
-/** Upload with the rights questions plan §8a requires for each purpose. */
-export function Upload({ purpose, label, onUploaded }: { purpose: Purpose; label: string; onUploaded: (asset: UploadedAsset) => void }) {
+/**
+ * Upload with the rights questions plan §8a requires for each purpose. With `multiple`, several
+ * files (picked or dropped) share one set of answers, upload in turn, and arrive in one callback.
+ */
+export function Upload({
+  purpose,
+  label,
+  onUploaded,
+  multiple,
+  onUploadedMany,
+}: {
+  purpose: Purpose;
+  label: string;
+  onUploaded?: (asset: UploadedAsset) => void;
+  /** Max files per batch (enables multi-select and multi-drop). */
+  multiple?: number;
+  onUploadedMany?: (assets: UploadedAsset[]) => void;
+}) {
   const uid = useId();
   const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [failed, setFailed] = useState<Record<string, string>>({});
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [sourceType, setSourceType] = useState(purpose === "product_image" ? "own_photo" : purpose === "voiceover" ? "recorded_voice" : purpose === "brand_logo" ? "official_brand" : "stock_licensed");
   const [permission, setPermission] = useState(false);
   const [license, setLicense] = useState("");
@@ -37,19 +56,38 @@ export function Upload({ purpose, label, onUploaded }: { purpose: Purpose; label
   const [attribution, setAttribution] = useState("");
   const [origin, setOrigin] = useState("");
   const [consent, setConsent] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isImage = purpose === "product_image" || purpose === "brand_logo";
+  const max = multiple ?? 1;
+  const busy = progress !== null;
+  const file = files[0] ?? null;
+  const key = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
+
+  // Thumbnails for chosen images (object URLs are released when the selection changes).
+  const previews = useMemo(() => (isImage ? files.map((f) => URL.createObjectURL(f)) : []), [files, isImage]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+
+  const choose = (list: FileList | File[] | null) => {
+    const kind = isImage ? "image/" : "audio/";
+    const picked = [...(list ?? [])].filter((f) => f.type.startsWith(kind) || f.type === "");
+    setError(picked.length < (list?.length ?? 0) ? `Some files were skipped — this slot takes ${isImage ? "images" : "audio"} only.` : null);
+    setFailed({});
+    if (picked.length > max) {
+      setError(`You can add ${max} more ${max === 1 ? "file" : "files"} here — the first ${max} were kept.`);
+    }
+    setFiles(picked.slice(0, max));
+    if (input.current) input.current.value = "";
+  };
 
   const reset = () => {
-    setFile(null);
+    setFiles([]);
+    setFailed({});
     setError(null);
     if (input.current) input.current.value = "";
   };
 
   async function upload() {
-    if (!file) return;
-    setBusy(true);
+    if (!files.length) return;
     setError(null);
     const meta = {
       purpose,
@@ -57,41 +95,92 @@ export function Upload({ purpose, label, onUploaded }: { purpose: Purpose; label
         ? { sourceType, commercialUse: permission ? "yes" : "unknown", permissionConfirmed: permission, origin: origin || null }
         : { sourceType, license: license || null, commercialUse, attributionText: attribution || null, origin: origin || null, ...(purpose === "voiceover" ? { talentConsent: consent } : {}) },
     };
-    const form = new FormData();
-    form.set("file", file);
-    form.set("meta", JSON.stringify(meta));
-    try {
-      const res = await fetch("/api/assets", { method: "POST", body: form });
-      const body = (await res.json()) as { asset?: UploadedAsset; error?: { message: string; fields?: { message: string }[] } };
-      if (!res.ok || !body.asset) throw new Error([body.error?.message, ...(body.error?.fields?.map((f) => f.message) ?? [])].filter(Boolean).join(" "));
-      onUploaded(body.asset);
-      reset();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+    const ok: UploadedAsset[] = [];
+    const bad: Record<string, string> = {};
+    const remaining: File[] = [];
+    setProgress({ done: 0, total: files.length });
+    for (const [i, f] of files.entries()) {
+      const form = new FormData();
+      form.set("file", f);
+      form.set("meta", JSON.stringify(meta));
+      try {
+        const res = await fetch("/api/assets", { method: "POST", body: form });
+        const body = (await res.json()) as { asset?: UploadedAsset; error?: { message: string; fields?: { message: string }[] } };
+        if (!res.ok || !body.asset) throw new Error([body.error?.message, ...(body.error?.fields?.map((x) => x.message) ?? [])].filter(Boolean).join(" "));
+        ok.push(body.asset);
+      } catch (e) {
+        bad[key(f)] = (e as Error).message;
+        remaining.push(f);
+      }
+      setProgress({ done: i + 1, total: files.length });
     }
+    setProgress(null);
+    if (ok.length) {
+      if (onUploadedMany) onUploadedMany(ok);
+      else ok.forEach((a) => onUploaded?.(a));
+    }
+    setFiles(remaining);
+    setFailed(bad);
+    if (input.current) input.current.value = "";
+    if (remaining.length) setError(remaining.length === files.length ? "Nothing was uploaded — see the reasons below." : `${ok.length} uploaded, ${remaining.length} didn't — see the reasons below.`);
   }
 
   return (
-    <div className="grid gap-3 rounded-lg border border-dashed border-line-strong bg-sunken/50 p-3">
+    <div
+      onDragOver={(e) => {
+        if (busy) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        if (!busy) choose(e.dataTransfer.files);
+      }}
+      className={`grid gap-3 rounded-lg border border-dashed p-3 transition-colors duration-150 ${dragging ? "border-accent bg-accent-soft" : "border-line-strong bg-sunken/50"}`}
+    >
       <div className="flex flex-wrap items-center gap-3">
-        <input id={`${uid}-file`} ref={input} type="file" accept={ACCEPT[purpose]} onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="peer sr-only" />
+        <input id={`${uid}-file`} ref={input} type="file" accept={ACCEPT[purpose]} multiple={max > 1} disabled={busy} onChange={(e) => choose(e.target.files)} className="peer sr-only" />
         <label htmlFor={`${uid}-file`} className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-line bg-panel-2 px-3.5 text-sm font-semibold transition-colors hover:border-line-strong peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent">
           <IconUpload size={16} />
-          {file ? "Choose another file" : label}
+          {files.length ? (max > 1 ? "Choose different files" : "Choose another file") : label}
         </label>
-        {file ? (
+        {files.length ? (
           <span className="flex min-w-0 items-center gap-1 text-sm text-ink-2">
-            <span className="truncate">{file.name}</span>
-            <button type="button" aria-label="Clear the chosen file" onClick={reset} className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-panel-2 hover:text-ink">
+            <span className="truncate">{files.length === 1 ? file!.name : `${files.length} files selected`}</span>
+            <button type="button" aria-label={files.length === 1 ? "Clear the chosen file" : "Clear the chosen files"} onClick={reset} disabled={busy} className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-panel-2 hover:text-ink">
               <IconX size={14} />
             </button>
           </span>
         ) : (
-          <span className="text-xs text-ink-3">{HINT[purpose]}</span>
+          <span className="text-xs text-ink-3">
+            {max > 1 ? `Select or drop up to ${max} at once. ` : "Or drop a file here. "}
+            {HINT[purpose]}
+          </span>
         )}
       </div>
+      {files.length > 1 || (files.length === 1 && isImage) ? (
+        <ul className="flex flex-wrap gap-2" aria-label="Chosen files">
+          {files.map((f, i) => (
+            <li key={key(f)} className={`relative flex items-center gap-2 rounded-lg border bg-panel py-1 pl-1 pr-8 text-xs ${failed[key(f)] ? "border-bad/50" : "border-line"}`}>
+              {isImage && previews[i] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previews[i]} alt="" className="size-10 rounded-md bg-white object-contain" />
+              ) : null}
+              <span className="grid max-w-[11rem] gap-0.5">
+                <span className="truncate font-medium">{f.name}</span>
+                <span className={`truncate ${failed[key(f)] ? "font-semibold text-bad" : "text-ink-3"}`}>{failed[key(f)] ?? `${(f.size / 1024 ** 2).toFixed(1)} MB`}</span>
+              </span>
+              <button type="button" aria-label={`Remove ${f.name}`} disabled={busy} onClick={() => setFiles((x) => x.filter((y) => y !== f))} className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-ink-3 hover:bg-panel-2 hover:text-ink">
+                <IconX size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {file ? (
         <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
           {purpose === "brand_logo" ? (
@@ -123,7 +212,7 @@ export function Upload({ purpose, label, onUploaded }: { purpose: Purpose; label
           )}
           {purpose === "product_image" ? (
             <div className="sm:col-span-2">
-              <Checkbox id={`${uid}-perm`} checked={permission} onChange={setPermission} label="I have permission to use this image in my ads." />
+              <Checkbox id={`${uid}-perm`} checked={permission} onChange={setPermission} label={files.length > 1 ? "I have permission to use these images in my ads." : "I have permission to use this image in my ads."} />
             </div>
           ) : purpose !== "brand_logo" ? (
             <>
@@ -147,10 +236,15 @@ export function Upload({ purpose, label, onUploaded }: { purpose: Purpose; label
               ) : null}
             </>
           ) : null}
-          <div className="sm:col-span-2">
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <Button variant="secondary" onClick={upload} disabled={busy}>
-              {busy ? "Uploading…" : "Upload"}
+              {progress ? (progress.total > 1 ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Uploading…") : files.length > 1 ? `Upload ${files.length} files` : "Upload"}
             </Button>
+            {progress && progress.total > 1 ? (
+              <div className="h-1.5 w-32 overflow-hidden rounded-full bg-panel-2" role="progressbar" aria-label="Upload progress" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+                <div className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

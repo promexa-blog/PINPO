@@ -109,29 +109,44 @@ export function MobileMenu({ mode }: { mode: StudioMode }) {
   );
 }
 
-type Theme = "system" | "light" | "dark";
+export type Theme = "system" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { system: "dark", dark: "light", light: "system" };
 const LABEL: Record<Theme, string> = { system: "Theme: match system", dark: "Theme: dark", light: "Theme: light" };
+const THEME_EVENT = "pinpo-theme";
 
-/** Cycles system → dark → light. Stored in a cookie so the server renders the right theme (no flash). */
-export function ThemeToggle() {
+/** Applies a theme now and remembers it in a cookie (read by the root layout, so no flash on load). */
+export function setStudioTheme(next: Theme) {
+  if (next === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = next;
+  document.cookie = `pinpo-theme=${next}; path=/; max-age=31536000; samesite=lax`;
+  window.dispatchEvent(new CustomEvent<Theme>(THEME_EVENT, { detail: next }));
+}
+
+export function currentTheme(): Theme {
+  const t = typeof document === "undefined" ? undefined : document.documentElement.dataset.theme;
+  return t === "light" || t === "dark" ? t : "system";
+}
+
+/** Keeps a component in sync with theme changes made anywhere (header toggle or Settings). */
+export function useStudioTheme(): Theme {
   const [theme, setTheme] = useState<Theme>("system");
   useEffect(() => {
-    const t = document.documentElement.dataset.theme;
     // Reflect the server-rendered choice once mounted.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from the DOM
-    if (t === "light" || t === "dark") setTheme(t);
+    setTheme(currentTheme());
+    const on = (e: Event) => setTheme((e as CustomEvent<Theme>).detail);
+    window.addEventListener(THEME_EVENT, on);
+    return () => window.removeEventListener(THEME_EVENT, on);
   }, []);
-  const apply = () => {
-    const next = NEXT[theme];
-    setTheme(next);
-    if (next === "system") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = next;
-    document.cookie = `pinpo-theme=${next}; path=/; max-age=31536000; samesite=lax`;
-  };
+  return theme;
+}
+
+/** Header button: cycles system → dark → light. */
+export function ThemeToggle() {
+  const theme = useStudioTheme();
   const Icon = theme === "light" ? IconSun : theme === "dark" ? IconMoon : IconMonitor;
   return (
-    <button type="button" onClick={apply} aria-label={`${LABEL[theme]}. Change theme`} title={LABEL[theme]} className="grid size-9 place-items-center rounded-lg text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink">
+    <button type="button" onClick={() => setStudioTheme(NEXT[theme])} aria-label={`${LABEL[theme]}. Change theme`} title={LABEL[theme]} className="grid size-9 place-items-center rounded-lg text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink">
       <Icon size={18} />
     </button>
   );
